@@ -395,6 +395,15 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
         return this.data.selected.first();
     }
 
+    private selectedselectedKeysOnPage(): number[] {
+        const start = this.data.page.current * this.data.page.length;
+        const end = start + this.data.page.length;
+
+        return [...this.data.selected.keys()].filter(
+            (n) => n < end && n >= start
+        );
+    }
+
     /**
      * Provides default function behaviour for non-functions passed to
      * methods.
@@ -625,16 +634,16 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
         if (interaction.isButton()) {
             const getPageButtonId = interaction.customId.split('--')?.pop();
             switch (getPageButtonId) {
-                case '--firstPage':
+                case 'firstPage':
                     this.toFirstPage();
                     break;
-                case '--prevPage':
+                case 'prevPage':
                     this.toPreviousPage();
                     break;
-                case '--nextPage':
+                case 'nextPage':
                     this.toNextPage();
                     break;
-                case '--lastPage':
+                case 'lastPage':
                     this.toLastPage();
                     break;
                 default:
@@ -643,8 +652,17 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
             return true;
         }
 
-        const ids = this.getIndecesFromValues(interaction.values);
-        this.setValues((_, i) => ids.includes(i));
+        // remove keys on current page
+        const start = this.data.page.current * this.data.page.length;
+        const end = start + this.data.page.length;
+        this.filterValues((_, i) => i >= end || i < start);
+
+        const idsOnPage = this.getIndecesFromValues(interaction.values);
+        for (const i of idsOnPage) {
+            const selectedOption = this.options.at(i);
+            if (typeof selectedOption === 'undefined') continue;
+            this.data.selected.set(i, selectedOption);
+        }
         return true;
     }
 
