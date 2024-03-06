@@ -1,0 +1,16 @@
+{
+    "name": "discordjs-choice-selectmenu-builder",
+    "version": "1.0.0",
+    "description": "A utility builder to represent arrays as paginated Discord select menus.",
+    "main": "index.js",
+    "scripts": {
+        "build": "tsc.cmd",
+        "test": "jest"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "dependencies": {
+        "discord.js": "^14.14.1"
+    }
+}

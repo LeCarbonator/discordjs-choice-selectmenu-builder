@@ -1,0 +1,7 @@
+/node_modules
+
+# dev environment
+Todo.json
+
+# build files
+/dist
