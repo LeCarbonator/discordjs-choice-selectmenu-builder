@@ -4,7 +4,7 @@ import {
     ButtonBuilder,
     StringSelectMenuBuilder
 } from 'discord.js';
-import { ChoiceSelectMenuBuilder } from '../src/ChoiceSelectMenuBuilder';
+import { ChoiceSelectMenuBuilder } from '../src';
 
 interface TestOption {
     foo: string;
@@ -91,18 +91,18 @@ test('Component can paginate', () => {
         .setLabel((v) => v.foo)
         .setCustomId('testingId');
 
-    const pageOne = selectMenu.optionsAtPage();
+    const pageOne = selectMenu.optionsOnPage();
     selectMenu.toLastPage();
-    const pageThree = selectMenu.optionsAtPage();
+    const pageThree = selectMenu.optionsOnPage();
     selectMenu.toPreviousPage();
-    const pageTwo = selectMenu.optionsAtPage();
+    const pageTwo = selectMenu.optionsOnPage();
 
     expect(pageOne.length).toBe(25);
     expect(pageTwo.length).toBe(25);
     expect(pageThree.length).toBe(1);
 
     selectMenu.toFirstPage();
-    const newPageOne = selectMenu.optionsAtPage();
+    const newPageOne = selectMenu.optionsOnPage();
     expect(newPageOne).toEqual(pageOne);
 });
 
@@ -116,7 +116,7 @@ test('Component resepects maxChoices for pagination', () => {
     const selectedOne = selectMenu.selectedOnPage();
     selectMenu.toNextPage();
     const selectedThree = selectMenu.selectedOnPage();
-    const pageThree = selectMenu.optionsAtPage();
+    const pageThree = selectMenu.optionsOnPage();
 
     expect(selectedOne.length).toBe(1);
     selectMenu.toNextPage();
