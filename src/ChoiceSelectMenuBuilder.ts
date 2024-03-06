@@ -188,8 +188,8 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
 
     /**
      * Sets the custom ID of this builder.
-     * @param customId The custom ID to set
-     * @returns {PageSelectMenuBuilder}
+     * @param {string} customId The custom ID to set
+     * @returns {ChoiceSelectMenuBuilder}
      */
     public setCustomId(customId: string): this {
         this.data.customId = customId;
@@ -199,8 +199,8 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
     /**
      * Set the minimum amount of choices of this builder. Defaults to
      * 0 for every new instance.
-     * @param amount The minimum amount of choices to select in this menu.
-     * @returns {PageSelectMenuBuilder}
+     * @param {number} amount The minimum amount of choices to select in this menu.
+     * @returns {ChoiceSelectMenuBuilder}
      */
     public setMinChoices(amount: number): this {
         if (amount > ChoiceSelectMenuBuilder.OPTIONS_LIMIT)
@@ -218,8 +218,8 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
 
     /**
      * Set the maximum amount of choices of this select menu.
-     * @param amount The maximum amount of choices to select in this menu.
-     * @returns {PageSelectMenuBuilder}
+     * @param {number} amount The maximum amount of choices to select in this menu.
+     * @returns {ChoiceSelectMenuBuilder}
      */
     public setMaxChoices(amount: number): this {
         if (amount <= 0) throw new Error('MaxChoices may not be 0 or lower.');
@@ -233,10 +233,13 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
     }
 
     /**
-     * Sets the function that is called when
-     * @param labelFn The function that will be called to transform the element
-     * into a label.
-     * @returns {PageSelectMenuBuilder}
+     * Sets the callback function to transform an array element into a readable
+     * label string. Note that discord's character limit on labels apply.
+     * @param {visualizeCallback} labelFn - The callback function to transform the element.
+     * @returns A string that must be below Discord's character limit for
+     * select menu option labels.
+     * @see {@link https://discord.com/developers/docs/interactions/message-components#select-menu-object-select-option-structure}
+     * @returns {ChoiceSelectMenuBuilder}
      */
     public setLabel(labelFn: PageSelectComponent<ChoiceType>['labelFn']): this {
         this.data.labelFn = labelFn;
@@ -244,13 +247,18 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
     }
 
     /**
-     * Set the function to transform an element into
-     * a description field.
-     * @param descriptionFn The function to transform an element into a string
-     * @returns {PageSelectMenuBuilder}
+     * Sets the callback function to transform an array element into a readable
+     * description string. Note that discord's character limit on descriptions apply.
+     * Will not create a description by default.
+     * @param {visualizeCallback} descriptionFn - The callback function to transform the element.
+     * @returns A string that must be below Discord's character limit for
+     * select menu option descriptions.
+     * @see {@link https://discord.com/developers/docs/interactions/message-components#select-menu-object-select-option-structure}
      */
     public setDescription(
-        descriptionFn: PageSelectComponent<ChoiceType>['descriptionFn'] | null
+        descriptionFn: NonNullable<
+            PageSelectComponent<ChoiceType>['descriptionFn']
+        > | null
     ): this {
         this.data.descriptionFn = descriptionFn ?? undefined;
         return this;
@@ -271,10 +279,11 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
     }
 
     /**
-     * Set the selected values of this
-     * @param selectedFn The function to call over each element
-     * to decide whether or not it's selected
-     * @returns {PageSelectMenuBuilder}
+     * Set the selected values of this builder.
+     * @param selected The value, array of values, or callback function to
+     * determine the selected elements. Note that an array of values defaults to
+     * `Array.prototype.includes()`, which may fail for non-primitive types.
+     * @returns {ChoiceSelectMenuBuilder}
      */
     public setValues(selected: SelectCallback<ChoiceType>): this {
         const selectFn = this.narrowSelectCallback(selected);
@@ -295,9 +304,9 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
 
     /**
      * Filters the selected values based on the provided function.
-     * @param valueFn The function to use as filter. If this function
+     * @param valueFn The callback function to use as filter. If this function
      * resolves to false, the selected value is removed from this menu.
-     * @returns {PageSelectMenuBuilder}
+     * @returns {ChoiceSelectMenuBuilder}
      */
     public filterValues(
         valueFn: (value: ChoiceType, index: number) => boolean
@@ -309,6 +318,7 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
 
     /**
      * Clears all selected values from this menu.
+     * @returns {ChoiceSelectMenuBuilder}
      */
     public clearValues(): this {
         this.data.selected.clear();
@@ -317,7 +327,9 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
     }
 
     /**
-     * Deselects the last value of the selected values.
+     * Removes the last selected value and returns it.
+     * If there are no selected values, it will return undefined.
+     *
      */
     public popValue(): ChoiceType | undefined {
         const lastKey = this.data.selected.lastKey();
@@ -332,9 +344,9 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
     /**
      * Returns a shallow copy of options that are visible on the current page.
      * If no page is specified, it will return the current page.
-     * @param page The page to fetch options from.
+     * @param {number|undefined} page The page to fetch options from.
      */
-    public optionsAtPage(page = this.data.page.current): ChoiceType[] {
+    public optionsAtPage(page: number = this.data.page.current): ChoiceType[] {
         if (this.options.length <= this.data.page.length) {
             return this.options;
         }
@@ -370,7 +382,7 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
      * The selected values of this select menu.
      * Returns a shallow copy of the provided choices.
      * If you only need the first property, consider using
-     * {@link PageSelectMenuBuilder#firstValue}
+     * {@link ChoiceSelectMenuBuilder#firstValue}
      */
     public get values(): ChoiceType[] {
         return [...this.data.selected.values()];
@@ -412,7 +424,7 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
      * Changes the paginated menu to the first page. If the maximum
      * amount of choices has been reached, it only skips to pages with
      * selections on it.
-     * @returns {PageSelectMenuBuilder}
+     * @returns {ChoiceSelectMenuBuilder}
      */
     public toFirstPage(): this {
         const { page, selected } = this.data;
@@ -437,7 +449,7 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
      * Changes the paginated menu to the previous page. If the maximum
      * amount of choices has been reached, only skips to pages with
      * selections on it.
-     * @returns {PageSelectMenuBuilder}
+     * @returns {ChoiceSelectMenuBuilder}
      */
     public toPreviousPage(): this {
         const { page, selected } = this.data;
@@ -467,7 +479,7 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
      * Changes the paginated menu to the next page. If the maximum
      * amount of choices has been reached, only skips to pages with
      * selections on it.
-     * @returns {PageSelectMenuBuilder}
+     * @returns {ChoiceSelectMenuBuilder}
      */
     public toNextPage(): this {
         const { page, selected } = this.data;
@@ -481,7 +493,7 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
         }
 
         // we want to avoid exceeding our maxChoices. Therefore, if we have
-        // already a full amount of choices, we only go back to the closest
+        // already a full amount of choices, we only go forward to the closest
         // page that has selections on it.
         const currentPageEnd = page.current * page.length + page.length;
         const minNextIndex = selected
@@ -497,7 +509,7 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
      * Changes the paginated menu to the last page. If the maximum
      * amount of choices has been reached, it only skips to pages with
      * selections on it.
-     * @returns {PageSelectMenuBuilder}
+     * @returns {ChoiceSelectMenuBuilder}
      */
     public toLastPage(): this {
         const { page, selected } = this.data;
@@ -510,7 +522,7 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
         }
 
         // we want to avoid exceeding our maxChoices. Therefore, if we have
-        // already a full amount of choices, we only go back the first
+        // already a full amount of choices, we only go forward to the last
         // page that has selections on it.
 
         // maxChoices is always > 0, so selected.size cannot be 0 from if guard above
@@ -519,7 +531,7 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
     }
 
     /**
-     * Transforms this builder into a visualized action row.
+     * Creates the action row based on this builder.
      * If the passed `options` array is empty, no select menu will be generated.
      * If the array exceeds discord's limit for select menus,
      * a second row of page buttons will be passed.
@@ -531,7 +543,7 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
         if (!this.isValidComponent()) {
             throw new Error(
                 'Both of the following properties must be set ' +
-                    'for PageSelectMenuBuilder: setCustomId()'
+                    'for ChoiceSelectMenuBuilder: setCustomId()'
             );
         }
 
@@ -602,8 +614,8 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
     }
 
     /**
-     * Determines whether or not the interaction belongs to this instance.
-     * If the interaction belongs to this select menu, it handles the received
+     * Determines whether or not the interaction belongs to this builder.
+     * If the interaction belongs to this builder, it handles the received
      * interaction response.
      * @param interaction The component interaction response to check
      */
@@ -611,7 +623,23 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
         if (!this.hasComponent(interaction)) return false;
 
         if (interaction.isButton()) {
-            this.handlePageButtonResponse(interaction);
+            const getPageButtonId = interaction.customId.split('--')?.pop();
+            switch (getPageButtonId) {
+                case '--firstPage':
+                    this.toFirstPage();
+                    break;
+                case '--prevPage':
+                    this.toPreviousPage();
+                    break;
+                case '--nextPage':
+                    this.toNextPage();
+                    break;
+                case '--lastPage':
+                    this.toLastPage();
+                    break;
+                default:
+                    break;
+            }
             return true;
         }
 
@@ -637,7 +665,7 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
     /**
      * Transform an array of values (from a select menu)
      * into the ending digits. This assumes that the StringSelectMenuInteraction
-     * belongs to this PageSelectMenuBuilder. If that assumption is not met or there
+     * belongs to this ChoiceSelectMenuBuilder. If that assumption is not met or there
      * is some issue with the custom IDs, they will be filtered out.
      * @param values The values to transform into digits.
      */
@@ -647,31 +675,6 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
         return values
             .map((v) => Number(v.split('--')?.pop()))
             .filter(isNumeric);
-    }
-
-    /**
-     * Handles the page button response from a user. This is only used
-     * for internal cleaner code, and should not be a public method.
-     * @param interaction The component interaction received.
-     */
-    private handlePageButtonResponse(interaction: ButtonInteraction) {
-        const getPageButtonId = interaction.customId.split('--')?.pop();
-        switch (getPageButtonId) {
-            case '--firstPage':
-                this.toFirstPage();
-                break;
-            case '--prevPage':
-                this.toPreviousPage();
-                break;
-            case '--nextPage':
-                this.toNextPage();
-                break;
-            case '--lastPage':
-                this.toLastPage();
-                break;
-            default:
-                break;
-        }
     }
 
     /**
@@ -728,12 +731,6 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
         start?: number,
         end?: number
     ): APISelectMenuOption[] {
-        if (!this.isValidComponent())
-            throw new Error(
-                'Both of the following properties must be set ' +
-                    'for PageSelectMenuBuilder: setCustomId(), setLabel()'
-            );
-
         if (typeof start === 'undefined') {
             return this.options.map(this.toAPISelectMenuOption, this);
         }
@@ -809,3 +806,10 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
         );
     }
 }
+
+/**
+ * @callback visualizeCallback
+ * @template ChoiceType
+ * @param {ChoiceType} option An element from the `options` array.
+ * @param {number} index The element's index in the `options` array.
+ */
