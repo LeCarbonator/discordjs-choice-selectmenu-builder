@@ -303,6 +303,29 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
     }
 
     /**
+     * Add the selected values of this builder.
+     * @param selected The value, array of values, or callback function to
+     * determine the additional selected elements. Note that an array of values defaults to
+     * `Array.prototype.includes()`, which may fail for non-primitive types.
+     * @returns {ChoiceSelectMenuBuilder}
+     */
+    public addValues(selected: SelectCallback<ChoiceType>): this {
+        const selectFn = this.narrowSelectCallback(selected);
+        for (let i = 0; i < this.options.length; i++) {
+            const o = this.options[i];
+            if (selectFn(o, i, this.options)) this.data.selected.set(i, o);
+        }
+
+        const maxChoices = this.data.maxChoices ?? this.options.length;
+
+        if (maxChoices < this.data.selected.size)
+            throw new Error('MaxChoices in this menu ');
+
+        this.updatePageProps();
+        return this;
+    }
+
+    /**
      * Filters the selected values based on the provided function.
      * @param valueFn The callback function to use as filter. If this function
      * resolves to false, the selected value is removed from this menu.
@@ -346,7 +369,7 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
      * If no page is specified, it will return the current page.
      * @param {number|undefined} page The page to fetch options from.
      */
-    public optionsAtPage(page: number = this.data.page.current): ChoiceType[] {
+    public optionsOnPage(page: number = this.data.page.current): ChoiceType[] {
         if (this.options.length <= this.data.page.length) {
             return this.options;
         }
@@ -579,7 +602,7 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
                 //   so they cancel each other out. This is only for pagination
                 //   purposes.
                 maxChoices - selected.size + this.selectedOnPage().length,
-                this.optionsAtPage().length
+                this.optionsOnPage().length
             ),
             placeholder
         });
