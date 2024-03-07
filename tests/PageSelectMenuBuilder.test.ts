@@ -2,6 +2,7 @@ import {
     APISelectMenuOption,
     ActionRowBuilder,
     ButtonBuilder,
+    ButtonStyle,
     StringSelectMenuBuilder
 } from 'discord.js';
 import { ChoiceSelectMenuBuilder } from '../src';
@@ -186,6 +187,52 @@ test('Pages can be changed even if minChoices and maxChoices are equal', () => {
     selectMenu.toLastPage();
     expect(selectMenu.selectedOnPage().length).toBe(5);
     expect(selectMenu.data.page.current).toBe(selectMenu.data.page.max);
+});
+
+test('Setters change the data', () => {
+    const menu = new ChoiceSelectMenuBuilder(getOptions(50))
+        .setCustomId('testingId')
+        .setButtonStyles(ButtonStyle.Danger, ButtonStyle.Success)
+        .setPlaceholder('Static string')
+        .setMinChoices(1)
+        .setMaxChoices(3)
+        .setLabel((v) => v.foo)
+        .setDescription((v) => v.bar);
+
+    expect(menu.data.customId).toBe('testingId');
+    expect(menu.data.buttonStyles.navigator).toBe(ButtonStyle.Danger);
+    expect(menu.data.buttonStyles.middle).toBe(ButtonStyle.Success);
+    expect(menu.data.placeholder).toBe('Static string');
+    expect(menu.data.minChoices).toBe(1);
+    expect(menu.data.maxChoices).toBe(3);
+
+    const labelFn = menu.data.labelFn;
+    const descriptionFn = menu.data.descriptionFn;
+
+    expect(labelFn({ foo: 'test', bar: '' }, 0)).toBe('test');
+    expect(descriptionFn?.({ foo: 'test', bar: 'barTest' }, 5)).toBe('barTest');
+
+    menu.setPlaceholder((min, max) => `Select ${min}-${max}`);
+
+    expect(typeof menu.data.placeholder).toBe('function');
+    expect(
+        typeof menu.data.placeholder === 'function'
+            ? menu.data.placeholder(8, 15)
+            : 'N/A'
+    ).toBe('Select 8-15');
+
+    menu.setPlaceholder((_, max) => `Select up to ${max}`);
+    const actionRows = menu.toActionRow();
+
+    const apiSelectMenu = actionRows
+        .at(1)
+        ?.components.at(0) as StringSelectMenuBuilder;
+
+    const apiButton = actionRows.at(0)?.components.at(0) as ButtonBuilder;
+
+    expect(apiSelectMenu.data.custom_id).toBe('testingId');
+    expect(apiSelectMenu.data.placeholder).toBe('Select up to 3');
+    expect(apiButton.data.style).toBe(ButtonStyle.Danger);
 });
 
 /**

@@ -52,7 +52,7 @@ type PageSelectComponent<ChoiceType> = {
     /**
      * The placeholder to display on the select menu.
      */
-    placeholder?: string;
+    placeholder?: string | ((minChoices: number, maxChoices: number) => string);
     /**
      * The callback function to transform an array element into a readable
      * label string. Note that discord's character limit on labels apply.
@@ -275,6 +275,39 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
     ): this {
         this.data.buttonStyles.navigator = navigators;
         this.data.buttonStyles.middle = centerButton ?? ButtonStyle.Danger;
+        return this;
+    }
+
+    /**
+     * Set the placeholder of this builder's select menu.
+     * @param placeholder A static string to set as placeholder
+     *
+     * Note that the placeholder must be below discord's placeholder character limit.
+     * @see {@link https://discord.com/developers/docs/interactions/message-components#select-menu-object-select-menu-structure}
+     */
+    public setPlaceholder(placeholder: string | null): this;
+    /**
+     * Set the placeholder of this builder's select menu.
+     * @param placeholder A callback function to dynamically set the placeholder. Passes
+     * the minimum and maximum choices of the current select menu.
+     *
+     * Note that the placeholder must be below discord's placeholder character limit.
+     * @see {@link https://discord.com/developers/docs/interactions/message-components#select-menu-object-select-menu-structure
+     */
+    public setPlaceholder(
+        placeholder: ((minChoices: number, maxChoices: number) => string) | null
+    ): this;
+    public setPlaceholder(
+        placeholder:
+            | string
+            | ((minChoices: number, maxChoices: number) => string)
+            | null
+    ): this {
+        if (placeholder === null) {
+            this.data.placeholder = undefined;
+        } else {
+            this.data.placeholder = placeholder;
+        }
         return this;
     }
 
@@ -572,10 +605,9 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
         // ----------------------------------
         // Below Select Menu Minimum
         if (this.options.length === 0) return [];
-        if (!this.isValidComponent()) {
+        if (typeof this.data.customId === 'undefined') {
             throw new Error(
-                'Both of the following properties must be set ' +
-                    'for ChoiceSelectMenuBuilder: setCustomId()'
+                'ChoiceSelectMenuBuilder.customId: expected a string primitive'
             );
         }
 
@@ -591,20 +623,28 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
 
         const isPaginated = this.options.length > page.length;
 
+        const currentMin = isPaginated ? 0 : minChoices;
+        const currentMax = Math.min(
+            // - maxChoices could be = this.options.length, so
+            //      cap at this.optionsAtPage().length
+            // - if there's only one page, then
+            //      this.selected.length === this.selectedOnPage().length,
+            //   so they cancel each other out. This is only for pagination
+            //   purposes.
+            maxChoices - selected.size + this.selectedOnPage().length,
+            this.optionsOnPage().length
+        );
+
+        const menuPlaceholder =
+            typeof placeholder === 'function'
+                ? placeholder(currentMin, currentMax)
+                : placeholder;
+
         const selectMenu = new StringSelectMenuBuilder({
             customId,
-            minValues: isPaginated ? 0 : minChoices,
-            maxValues: Math.min(
-                // - maxChoices could be = this.options.length, so
-                //      cap at this.optionsAtPage().length
-                // - if there's only one page, then
-                //      this.selected.length === this.selectedOnPage().length,
-                //   so they cancel each other out. This is only for pagination
-                //   purposes.
-                maxChoices - selected.size + this.selectedOnPage().length,
-                this.optionsOnPage().length
-            ),
-            placeholder
+            minValues: currentMin,
+            maxValues: currentMax,
+            placeholder: menuPlaceholder
         });
 
         // ----------------------------------
@@ -733,15 +773,6 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
         this.data.page.max = Math.floor(
             this.options.length / this.data.page.length
         );
-    }
-
-    /**
-     * Determines whether mandatory components
-     * are present or not.
-     */
-    private isValidComponent(): boolean {
-        if (typeof this.data.customId === 'undefined') return false;
-        return true;
     }
 
     /**

@@ -1,6 +1,6 @@
 {
     "name": "discordjs-choice-selectmenu-builder",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "A utility builder to represent arrays as paginated Discord select menus.",
     "main": "./dist/index.js",
     "module": "./dist/index.mjs",
@@ -32,7 +32,7 @@
     },
     "repository": {
         "type": "git",
-        "url": "https://github.com/LeCarbonator/discordjs-choice-selectmenu-builder.git"
+        "url": "git+https://github.com/LeCarbonator/discordjs-choice-selectmenu-builder.git"
     },
     "bugs": {
         "url": "https://github.com/LeCarbonator/discordjs-choice-selectmenu-builder/issues"
