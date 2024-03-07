@@ -19,7 +19,7 @@
         "npm"
     ],
     "author": "LeCarbonator",
-    "license": "ISC",
+    "license": "MIT",
     "dependencies": {
         "discord.js": "^14.14.1"
     },
