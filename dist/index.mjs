@@ -1,3 +1,6 @@
+var __defProp = Object.defineProperty;
+var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
+
 // src/index.ts
 import {
   ActionRowBuilder,
@@ -7,13 +10,18 @@ import {
   StringSelectMenuBuilder
 } from "discord.js";
 var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
+  static {
+    __name(this, "ChoiceSelectMenuBuilder");
+  }
   constructor(choices, selected) {
     const selectedFn = this.narrowSelectCallback(selected);
     this.data = {
       selected: new Collection(choices.filter(selectedFn).entries()),
       labelFn: (value) => `${value}`,
+      descriptionFn: void 0,
       minChoices: 0,
       carrySelected: false,
+      placeholder: void 0,
       page: {
         current: 0,
         length: _ChoiceSelectMenuBuilder.OPTIONS_LIMIT,
@@ -139,8 +147,7 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
   setValues(selected) {
     const selectFn = this.narrowSelectCallback(selected);
     this.data.selected.clear();
-    for (let i = 0; i < this.options.length; i++) {
-      const o = this.options[i];
+    for (const [i, o] of this.options.entries()) {
       if (selectFn(o, i, this.options))
         this.data.selected.set(i, o);
     }
@@ -159,8 +166,7 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
    */
   addValues(selected) {
     const selectFn = this.narrowSelectCallback(selected);
-    for (let i = 0; i < this.options.length; i++) {
-      const o = this.options[i];
+    for (const [i, o] of this.options.entries()) {
       if (selectFn(o, i, this.options))
         this.data.selected.set(i, o);
     }
@@ -250,13 +256,6 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
    */
   get firstValue() {
     return this.data.selected.first();
-  }
-  selectedselectedKeysOnPage() {
-    const start = this.data.page.current * this.data.page.length;
-    const end = start + this.data.page.length;
-    return [...this.data.selected.keys()].filter(
-      (n) => n < end && n >= start
-    );
   }
   /**
    * Provides default function behaviour for non-functions passed to
@@ -395,13 +394,25 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
       maxChoices - selected.size + this.selectedOnPage().length,
       this.optionsOnPage().length
     );
-    const menuPlaceholder = typeof placeholder === "function" ? placeholder(currentMin, currentMax) : placeholder;
-    const selectMenu = new StringSelectMenuBuilder({
-      customId,
-      minValues: currentMin,
-      maxValues: currentMax,
-      placeholder: menuPlaceholder
-    });
+    const selectMenuData = {
+      custom_id: customId,
+      min_values: currentMin,
+      max_values: currentMax
+    };
+    switch (typeof placeholder) {
+      case "function":
+        selectMenuData.placeholder = placeholder(
+          currentMin,
+          currentMax
+        );
+        break;
+      case "string":
+        selectMenuData.placeholder = placeholder;
+        break;
+      default:
+        break;
+    }
+    const selectMenu = new StringSelectMenuBuilder(selectMenuData);
     if (!isPaginated) {
       const apiOptions2 = this.visualizeOptions();
       selectMenu.addOptions(apiOptions2);
@@ -483,7 +494,7 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
    * @param values The values to transform into digits.
    */
   getIndecesFromValues(values) {
-    const isNumeric = (n) => !isNaN(n) && isFinite(n);
+    const isNumeric = /* @__PURE__ */ __name((n) => !isNaN(n) && isFinite(n), "isNumeric");
     return values.map((v) => Number(v.split("--")?.pop())).filter(isNumeric);
   }
   /**

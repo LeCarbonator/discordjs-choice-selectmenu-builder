@@ -1,5 +1,6 @@
 import {
     APISelectMenuOption,
+    APIStringSelectComponent,
     ActionRowBuilder,
     ButtonBuilder,
     ButtonInteraction,
@@ -52,7 +53,10 @@ type PageSelectComponent<ChoiceType> = {
     /**
      * The placeholder to display on the select menu.
      */
-    placeholder?: string | ((minChoices: number, maxChoices: number) => string);
+    placeholder:
+        | string
+        | ((minChoices: number, maxChoices: number) => string)
+        | undefined;
     /**
      * The callback function to transform an array element into a readable
      * label string. Note that discord's character limit on labels apply.
@@ -73,7 +77,7 @@ type PageSelectComponent<ChoiceType> = {
      * select menu option descriptions.
      * @see {@link https://discord.com/developers/docs/interactions/message-components#select-menu-object-select-option-structure}
      */
-    descriptionFn?: (option: ChoiceType, index: number) => string;
+    descriptionFn: ((option: ChoiceType, index: number) => string) | undefined;
     /**
      * Stores the current page data of this builder.
      */
@@ -154,8 +158,10 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
         this.data = {
             selected: new Collection(choices.filter(selectedFn).entries()),
             labelFn: (value) => `${value}`,
+            descriptionFn: undefined,
             minChoices: 0,
             carrySelected: false,
+            placeholder: undefined,
             page: {
                 current: 0,
                 length: ChoiceSelectMenuBuilder.OPTIONS_LIMIT,
@@ -321,8 +327,7 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
     public setValues(selected: SelectCallback<ChoiceType>): this {
         const selectFn = this.narrowSelectCallback(selected);
         this.data.selected.clear();
-        for (let i = 0; i < this.options.length; i++) {
-            const o = this.options[i];
+        for (const [i, o] of this.options.entries()) {
             if (selectFn(o, i, this.options)) this.data.selected.set(i, o);
         }
 
@@ -344,8 +349,7 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
      */
     public addValues(selected: SelectCallback<ChoiceType>): this {
         const selectFn = this.narrowSelectCallback(selected);
-        for (let i = 0; i < this.options.length; i++) {
-            const o = this.options[i];
+        for (const [i, o] of this.options.entries()) {
             if (selectFn(o, i, this.options)) this.data.selected.set(i, o);
         }
 
@@ -449,15 +453,6 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
      */
     public get firstValue(): ChoiceType | undefined {
         return this.data.selected.first();
-    }
-
-    private selectedselectedKeysOnPage(): number[] {
-        const start = this.data.page.current * this.data.page.length;
-        const end = start + this.data.page.length;
-
-        return [...this.data.selected.keys()].filter(
-            (n) => n < end && n >= start
-        );
     }
 
     /**
@@ -635,17 +630,27 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
             this.optionsOnPage().length
         );
 
-        const menuPlaceholder =
-            typeof placeholder === 'function'
-                ? placeholder(currentMin, currentMax)
-                : placeholder;
+        const selectMenuData = {
+            custom_id: customId,
+            min_values: currentMin,
+            max_values: currentMax
+        } as Partial<APIStringSelectComponent>;
 
-        const selectMenu = new StringSelectMenuBuilder({
-            customId,
-            minValues: currentMin,
-            maxValues: currentMax,
-            placeholder: menuPlaceholder
-        });
+        switch (typeof placeholder) {
+            case 'function':
+                selectMenuData.placeholder = placeholder(
+                    currentMin,
+                    currentMax
+                );
+                break;
+            case 'string':
+                selectMenuData.placeholder = placeholder;
+                break;
+            default:
+                break;
+        }
+
+        const selectMenu = new StringSelectMenuBuilder(selectMenuData);
 
         // ----------------------------------
         // No Pagination
