@@ -32,7 +32,7 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
   constructor(choices, selected) {
     const selectedFn = this.narrowSelectCallback(selected);
     this.data = {
-      selected: new import_discord.Collection(choices.filter(selectedFn).entries()),
+      selected: new import_discord.Collection(),
       labelFn: (value) => `${value}`,
       minChoices: 0,
       carrySelected: false,
@@ -49,6 +49,7 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
       }
     };
     this.options = choices;
+    this.addValues(selectedFn);
   }
   /**
    * The maximum amount of select menu options that
@@ -436,12 +437,22 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
     }
     const start = page.current * page.length;
     const end = start + page.length;
-    const rawOptions = this.options.slice(start, end);
-    const selectedOptions = carrySelected ? [...selected.values()] : this.options.slice(start, end).filter((_, i) => selected.has(i + start));
-    selectMenu.addOptions([
-      ...selectedOptions.map(this.toAPISelectMenuOption, this),
-      ...rawOptions.map(this.toAPISelectMenuOption, this)
-    ]);
+    if (carrySelected) {
+      const rawOptions = this.options.slice(start, end + this.data.selected.size).map((option, i) => [i + start, option]);
+      const currentOptions = [
+        ...this.data.selected.entries(),
+        ...rawOptions.filter((v) => !this.data.selected.has(v[0]))
+      ];
+      selectMenu.addOptions(
+        currentOptions.map((v) => this.toAPISelectMenuOption(...v))
+      );
+    } else {
+      selectMenu.addOptions(
+        this.options.slice(start, end).map(
+          (option, i) => this.toAPISelectMenuOption(i + start, option)
+        )
+      );
+    }
     return [
       this.navigatorButtons,
       new import_discord.ActionRowBuilder({
@@ -525,10 +536,10 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
   }
   /**
    * Transforms the provided option into a usable API Select Menu Option.
-   * @param value The value to transform.
    * @param i The index of the array to transform at.
+   * @param value The value to transform.
    */
-  toAPISelectMenuOption(value, i) {
+  toAPISelectMenuOption(i, value) {
     const offset = this.data.page.current * this.data.page.length;
     return {
       label: this.data.labelFn(value, i),
@@ -546,9 +557,9 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
    */
   visualizeOptions(start, end) {
     if (typeof start === "undefined") {
-      return this.options.map(this.toAPISelectMenuOption, this);
+      return this.options.map((v, i) => this.toAPISelectMenuOption(i, v));
     }
-    return this.options.slice(start, end).map(this.toAPISelectMenuOption, this);
+    return this.options.slice(start, end).map((v, i) => this.toAPISelectMenuOption(i + start, v));
   }
   /**
    * Generates the page buttons for the currently selected page.

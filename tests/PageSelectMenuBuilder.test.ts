@@ -29,6 +29,12 @@ test('File can be initiated', () => {
     expect(selectMenu.data.selected.size).toBe(3);
     expect(selectMenu.values.length).toBe(3);
     expect(selectMenu.firstValue).toBeDefined();
+
+    const newSelectMenu = new ChoiceSelectMenuBuilder(
+        getOptions(60),
+        () => true
+    );
+    expect(newSelectMenu.values.length).toBe(60);
 });
 
 test('Component can generate actionRow for <= 25', () => {
@@ -112,7 +118,7 @@ test('Component respects maxChoices for pagination', () => {
         .setLabel((v) => v.foo)
         .setCustomId('testingId')
         .setMaxChoices(3)
-        .setValues((v) => ['foo0', 'foo55', 'foo56'].includes(v.foo));
+        .setValues((v) => ['foo3', 'foo55', 'foo56'].includes(v.foo));
     // since max was reached, we should not have page 2 now
     const selectedOne = selectMenu.selectedOnPage();
     selectMenu.toNextPage();
@@ -201,6 +207,13 @@ test('Options have unique values', () => {
                 | undefined
         )?.options.map((v) => v.data.value) ?? [];
 
+    expect(toOptions().filter((v) => typeof v === 'undefined').length).toBe(0);
+    expect([...new Set(toOptions())].length).toBe(toOptions().length);
+
+    selectMenu
+        .setMinChoices(1)
+        .setMaxChoices(1)
+        .setValues((v) => v.foo === 'foo5');
     expect(toOptions().filter((v) => typeof v === 'undefined').length).toBe(0);
     expect([...new Set(toOptions())].length).toBe(toOptions().length);
 });

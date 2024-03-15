@@ -332,8 +332,8 @@ declare class ChoiceSelectMenuBuilder<ChoiceType> {
     private updatePageProps;
     /**
      * Transforms the provided option into a usable API Select Menu Option.
-     * @param value The value to transform.
      * @param i The index of the array to transform at.
+     * @param value The value to transform.
      */
     private toAPISelectMenuOption;
     /**
