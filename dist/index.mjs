@@ -18,10 +18,8 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
     this.data = {
       selected: new Collection(choices.filter(selectedFn).entries()),
       labelFn: (value) => `${value}`,
-      descriptionFn: void 0,
       minChoices: 0,
       carrySelected: false,
-      placeholder: void 0,
       page: {
         current: 0,
         length: _ChoiceSelectMenuBuilder.OPTIONS_LIMIT,
@@ -116,7 +114,11 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
    * @see {@link https://discord.com/developers/docs/interactions/message-components#select-menu-object-select-option-structure}
    */
   setDescription(descriptionFn) {
-    this.data.descriptionFn = descriptionFn ?? void 0;
+    if (descriptionFn === null) {
+      delete this.data.descriptionFn;
+      return this;
+    }
+    this.data.descriptionFn = descriptionFn;
     return this;
   }
   /**
@@ -131,10 +133,10 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
   }
   setPlaceholder(placeholder) {
     if (placeholder === null) {
-      this.data.placeholder = void 0;
-    } else {
-      this.data.placeholder = placeholder;
+      delete this.data.placeholder;
+      return this;
     }
+    this.data.placeholder = placeholder;
     return this;
   }
   /**
@@ -145,16 +147,8 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
    * @returns {ChoiceSelectMenuBuilder}
    */
   setValues(selected) {
-    const selectFn = this.narrowSelectCallback(selected);
     this.data.selected.clear();
-    for (const [i, o] of this.options.entries()) {
-      if (selectFn(o, i, this.options))
-        this.data.selected.set(i, o);
-    }
-    const maxChoices = this.data.maxChoices ?? this.options.length;
-    if (maxChoices < this.data.selected.size)
-      throw new Error("MaxChoices in this menu ");
-    this.updatePageProps();
+    this.addValues(selected);
     return this;
   }
   /**
@@ -166,10 +160,12 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
    */
   addValues(selected) {
     const selectFn = this.narrowSelectCallback(selected);
-    for (const [i, o] of this.options.entries()) {
-      if (selectFn(o, i, this.options))
-        this.data.selected.set(i, o);
-    }
+    const collection = this.data.selected;
+    this.options.forEach((option, index, arr) => {
+      if (selectFn(option, index, arr)) {
+        collection.set(index, option);
+      }
+    });
     const maxChoices = this.data.maxChoices ?? this.options.length;
     if (maxChoices < this.data.selected.size)
       throw new Error("MaxChoices in this menu ");
@@ -414,8 +410,8 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
     }
     const selectMenu = new StringSelectMenuBuilder(selectMenuData);
     if (!isPaginated) {
-      const apiOptions2 = this.visualizeOptions();
-      selectMenu.addOptions(apiOptions2);
+      const apiOptions = this.visualizeOptions();
+      selectMenu.addOptions(apiOptions);
       return [
         new ActionRowBuilder({
           components: [selectMenu]
@@ -424,11 +420,11 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
     }
     const start = page.current * page.length;
     const end = start + page.length;
-    const apiOptions = this.visualizeOptions(start, end);
+    const rawOptions = this.options.slice(start, end);
     const selectedOptions = carrySelected ? [...selected.values()] : this.options.slice(start, end).filter((_, i) => selected.has(i + start));
     selectMenu.addOptions([
       ...selectedOptions.map(this.toAPISelectMenuOption, this),
-      ...apiOptions
+      ...rawOptions.map(this.toAPISelectMenuOption, this)
     ]);
     return [
       this.navigatorButtons,

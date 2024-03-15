@@ -37,7 +37,7 @@ type PageSelectComponent<ChoiceType> = {
     /**
      * The placeholder to display on the select menu.
      */
-    placeholder: string | ((minChoices: number, maxChoices: number) => string) | undefined;
+    placeholder?: string | ((minChoices: number, maxChoices: number) => string);
     /**
      * The callback function to transform an array element into a readable
      * label string. Note that discord's character limit on labels apply.
@@ -58,7 +58,7 @@ type PageSelectComponent<ChoiceType> = {
      * select menu option descriptions.
      * @see {@link https://discord.com/developers/docs/interactions/message-components#select-menu-object-select-option-structure}
      */
-    descriptionFn: ((option: ChoiceType, index: number) => string) | undefined;
+    descriptionFn?: (option: ChoiceType, index: number) => string;
     /**
      * Stores the current page data of this builder.
      */

@@ -53,10 +53,7 @@ type PageSelectComponent<ChoiceType> = {
     /**
      * The placeholder to display on the select menu.
      */
-    placeholder:
-        | string
-        | ((minChoices: number, maxChoices: number) => string)
-        | undefined;
+    placeholder?: string | ((minChoices: number, maxChoices: number) => string);
     /**
      * The callback function to transform an array element into a readable
      * label string. Note that discord's character limit on labels apply.
@@ -77,7 +74,7 @@ type PageSelectComponent<ChoiceType> = {
      * select menu option descriptions.
      * @see {@link https://discord.com/developers/docs/interactions/message-components#select-menu-object-select-option-structure}
      */
-    descriptionFn: ((option: ChoiceType, index: number) => string) | undefined;
+    descriptionFn?: (option: ChoiceType, index: number) => string;
     /**
      * Stores the current page data of this builder.
      */
@@ -158,10 +155,8 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
         this.data = {
             selected: new Collection(choices.filter(selectedFn).entries()),
             labelFn: (value) => `${value}`,
-            descriptionFn: undefined,
             minChoices: 0,
             carrySelected: false,
-            placeholder: undefined,
             page: {
                 current: 0,
                 length: ChoiceSelectMenuBuilder.OPTIONS_LIMIT,
@@ -266,7 +261,11 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
             PageSelectComponent<ChoiceType>['descriptionFn']
         > | null
     ): this {
-        this.data.descriptionFn = descriptionFn ?? undefined;
+        if (descriptionFn === null) {
+            delete this.data.descriptionFn;
+            return this;
+        }
+        this.data.descriptionFn = descriptionFn;
         return this;
     }
 
@@ -310,10 +309,10 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
             | null
     ): this {
         if (placeholder === null) {
-            this.data.placeholder = undefined;
-        } else {
-            this.data.placeholder = placeholder;
+            delete this.data.placeholder;
+            return this;
         }
+        this.data.placeholder = placeholder;
         return this;
     }
 
@@ -325,18 +324,8 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
      * @returns {ChoiceSelectMenuBuilder}
      */
     public setValues(selected: SelectCallback<ChoiceType>): this {
-        const selectFn = this.narrowSelectCallback(selected);
         this.data.selected.clear();
-        for (const [i, o] of this.options.entries()) {
-            if (selectFn(o, i, this.options)) this.data.selected.set(i, o);
-        }
-
-        const maxChoices = this.data.maxChoices ?? this.options.length;
-
-        if (maxChoices < this.data.selected.size)
-            throw new Error('MaxChoices in this menu ');
-
-        this.updatePageProps();
+        this.addValues(selected);
         return this;
     }
 
@@ -349,9 +338,12 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
      */
     public addValues(selected: SelectCallback<ChoiceType>): this {
         const selectFn = this.narrowSelectCallback(selected);
-        for (const [i, o] of this.options.entries()) {
-            if (selectFn(o, i, this.options)) this.data.selected.set(i, o);
-        }
+        const collection = this.data.selected;
+        this.options.forEach((option, index, arr) => {
+            if (selectFn(option, index, arr)) {
+                collection.set(index, option);
+            }
+        });
 
         const maxChoices = this.data.maxChoices ?? this.options.length;
 
@@ -669,7 +661,7 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
         // Pagination
         const start = page.current * page.length;
         const end = start + page.length;
-        const apiOptions = this.visualizeOptions(start, end);
+        const rawOptions = this.options.slice(start, end);
 
         const selectedOptions = carrySelected
             ? [...selected.values()]
@@ -679,7 +671,7 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
 
         selectMenu.addOptions([
             ...selectedOptions.map(this.toAPISelectMenuOption, this),
-            ...apiOptions
+            ...rawOptions.map(this.toAPISelectMenuOption, this)
         ]);
 
         return [

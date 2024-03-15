@@ -107,7 +107,7 @@ test('Component can paginate', () => {
     expect(newPageOne).toEqual(pageOne);
 });
 
-test('Component resepects maxChoices for pagination', () => {
+test('Component respects maxChoices for pagination', () => {
     const selectMenu = new ChoiceSelectMenuBuilder(getOptions(60))
         .setLabel((v) => v.foo)
         .setCustomId('testingId')
@@ -187,6 +187,22 @@ test('Pages can be changed even if minChoices and maxChoices are equal', () => {
     selectMenu.toLastPage();
     expect(selectMenu.selectedOnPage().length).toBe(5);
     expect(selectMenu.data.page.current).toBe(selectMenu.data.page.max);
+});
+
+test('Options have unique values', () => {
+    const selectMenu = new ChoiceSelectMenuBuilder(getOptions(60))
+        .setCustomId('testingId')
+        .setLabel((v) => v.foo);
+
+    const toOptions = () =>
+        (
+            selectMenu.toActionRow().at(-1)?.components[0] as
+                | StringSelectMenuBuilder
+                | undefined
+        )?.options.map((v) => v.data.value) ?? [];
+
+    expect(toOptions().filter((v) => typeof v === 'undefined').length).toBe(0);
+    expect([...new Set(toOptions())].length).toBe(toOptions().length);
 });
 
 test('Setters change the data', () => {
