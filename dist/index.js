@@ -396,7 +396,7 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
       maxChoices = this.options.length
     } = this.data;
     const isPaginated = this.options.length > page.length;
-    const currentMin = isPaginated ? 0 : minChoices;
+    const currentMin = !carrySelected && isPaginated ? 0 : minChoices;
     const currentMax = Math.min(
       // - maxChoices could be = this.options.length, so
       //      cap at this.optionsAtPage().length
@@ -489,16 +489,7 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
       }
       return true;
     }
-    const start = this.data.page.current * this.data.page.length;
-    const end = start + this.data.page.length;
-    this.filterValues((_, i) => i >= end || i < start);
-    const idsOnPage = this.getIndecesFromValues(interaction.values);
-    for (const i of idsOnPage) {
-      const selectedOption = this.options.at(i);
-      if (typeof selectedOption === "undefined")
-        continue;
-      this.data.selected.set(i, selectedOption);
-    }
+    this.updateSelectedFromValues(interaction.values);
     return true;
   }
   /**
@@ -510,15 +501,28 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
     return typeof this.data.customId !== "undefined" && interaction.customId.startsWith(this.data.customId);
   }
   /**
-   * Transform an array of values (from a select menu)
-   * into the ending digits. This assumes that the StringSelectMenuInteraction
+   * Parses an array of values (from a select menu)
+   * into the selected values. This assumes that the StringSelectMenuInteraction
    * belongs to this ChoiceSelectMenuBuilder. If that assumption is not met or there
    * is some issue with the custom IDs, they will be filtered out.
-   * @param values The values to transform into digits.
+   * @param values The values to transform into selected values.
    */
-  getIndecesFromValues(values) {
-    const isNumeric = /* @__PURE__ */ __name((n) => !isNaN(n) && isFinite(n), "isNumeric");
-    return values.map((v) => Number(v.split("--")?.pop())).filter(isNumeric);
+  updateSelectedFromValues(values) {
+    if (!this.data.carrySelected) {
+      const start = this.data.page.current * this.data.page.length;
+      const end = start + this.data.page.length;
+      this.filterValues((_, i) => i >= end || i < start);
+    } else {
+      this.data.selected.clear();
+    }
+    const idsOnPage = values.map((v) => Number(v.split("--")?.pop())).filter((n) => !isNaN(n) && isFinite(n));
+    for (const i of idsOnPage) {
+      const selectedOption = this.options.at(i);
+      if (typeof selectedOption === "undefined")
+        continue;
+      this.data.selected.set(i, selectedOption);
+    }
+    this.updatePageProps();
   }
   /**
    * Update the carrySelected, pageLength and maxPage properties
@@ -540,12 +544,11 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
    * @param value The value to transform.
    */
   toAPISelectMenuOption(i, value) {
-    const offset = this.data.page.current * this.data.page.length;
     return {
       label: this.data.labelFn(value, i),
       description: this.data.descriptionFn?.(value, i),
-      default: this.data.selected.has(i + offset),
-      value: `${this.data.customId}--${i + offset}`
+      default: this.data.selected.has(i),
+      value: `${this.data.customId}--${i}`
     };
   }
   /**
@@ -572,11 +575,12 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
       customId,
       selected,
       page,
+      carrySelected,
       maxChoices = this.options.length
     } = this.data;
     let isAtStart = page.current === 0;
     let isAtEnd = page.current === page.max;
-    if (selected.size >= maxChoices) {
+    if (!carrySelected && selected.size >= maxChoices) {
       const indexStart = page.current * page.length;
       const indexEnd = indexStart + page.length;
       isAtStart ||= selected.every((_, n) => n >= indexStart);

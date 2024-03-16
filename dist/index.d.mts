@@ -318,13 +318,13 @@ declare class ChoiceSelectMenuBuilder<ChoiceType> {
      */
     private hasComponent;
     /**
-     * Transform an array of values (from a select menu)
-     * into the ending digits. This assumes that the StringSelectMenuInteraction
+     * Parses an array of values (from a select menu)
+     * into the selected values. This assumes that the StringSelectMenuInteraction
      * belongs to this ChoiceSelectMenuBuilder. If that assumption is not met or there
      * is some issue with the custom IDs, they will be filtered out.
-     * @param values The values to transform into digits.
+     * @param values The values to transform into selected values.
      */
-    private getIndecesFromValues;
+    private updateSelectedFromValues;
     /**
      * Update the carrySelected, pageLength and maxPage properties
      * to the new values.
