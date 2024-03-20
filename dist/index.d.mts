@@ -1,4 +1,62 @@
-import { ButtonStyle, MessageComponentInteraction, Collection, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder } from 'discord.js';
+import { Collection, ButtonStyle, MessageComponentInteraction, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder } from 'discord.js';
+
+declare class PageManager<T> {
+    constructor(array: T[], selected: Collection<number, T>, minChoices: number, maxChoices?: number, currentPage?: number);
+    /**
+     * The length that a single select menu page can have.
+     */
+    length: number;
+    /**
+     * A reference to the array to paginate.
+     */
+    array: T[];
+    /**
+     * A reference to the selected elements.
+     */
+    selected: Collection<number, T>;
+    /**
+     * The 0-indexed page the builder is currently on.
+     * This is always in the range `0 <= current <= max`
+     */
+    current: number;
+    /**
+     * The minimum amount of choices that a user must make.
+     * Note that it only prevents selecting less than this value, it
+     * can still be visually shown without any selections.
+     */
+    minChoices: number;
+    /**
+     * The maximum amount of choices that a user may make.
+     * This value defaults to `options.length`.
+     */
+    maxChoices?: number;
+    get carrySelected(): boolean;
+    /**
+     * The maximum 0-indexed page the builder can reach.
+     * This property is derived from the page's length
+     */
+    get max(): number;
+    getPage(pageNumber?: number): [index: number, element: T][];
+    /**
+     * Returns a slice of the array, along with its actual index location.
+     * @param start - The start of the slice.
+     * @param end - The end of the slice.
+     * @param removeSelected - Removes selected indeces from the sliced array.
+     */
+    private getSlice;
+    /**
+     * Get the end index of the page starting from the start parameter.
+     * Will include more elements if the keys exist on the page.
+     * @param start - The offset to base the end index on.
+     * @param selectedIndeces - The selected indeces
+     */
+    private getEndIndex;
+    first(): void;
+    previous(): void;
+    next(): void;
+    last(): void;
+    private hasFreePageMovement;
+}
 
 /**
  * Represents a callback function that is passed to Array prototype methods such as
@@ -11,29 +69,11 @@ type PageSelectComponent<ChoiceType> = {
      */
     customId?: string;
     /**
-     * The minimum amount of choices that a user must make.
-     * Note that it only prevents selecting less than this value, it
-     * can still be visually shown without any selections.
-     */
-    minChoices: number;
-    /**
-     * The maximum amount of choices that a user may make.
-     * This value defaults to `options.length`.
-     */
-    maxChoices?: number;
-    /**
      * A collection of selected values and the index they are found at.
      * The key is used to ensure pagination is applied correctly
      * The values represent the selected items of the array.
      */
     selected: Collection<number, ChoiceType>;
-    /**
-     * Whether or not the selected items are carried throughout each page.
-     * This is an edge case where `minChoices === maxChoices`, which would
-     * otherwise prevent changing pages and values.
-     * @internal
-     */
-    carrySelected: boolean;
     /**
      * The placeholder to display on the select menu.
      */
@@ -60,45 +100,23 @@ type PageSelectComponent<ChoiceType> = {
      */
     descriptionFn?: (option: ChoiceType, index: number) => string;
     /**
-     * Stores the current page data of this builder.
+     * Contains data related to pages and methods to change them.
      */
-    page: {
-        /**
-         * The 0-indexed page the builder is currently on.
-         * This is always in the range `0 <= current <= max`
-         */
-        current: number;
-        /**
-         * The maximum 0-indexed page the builder can reach.
-         * This property is derived from the page's length
-         */
-        max: number;
-        /**
-         * The length that a single select menu page can have.
-         * This property defaults to Discord's limit, although
-         * it may be lower depending on the `carrySelected` edge case.
-         */
-        length: number;
-    };
+    pages: PageManager<ChoiceType>;
     /**
-     * Stores the current button styles of this builder.
+     * The button style for the nagivator buttons, which include
+     * ⏮️,◀️,▶️, and ⏭️.
+     * Note that navigator buttons only show up if there are more
+     * options than the defined page length of this builder.
      */
-    buttonStyles: {
-        /**
-         * The button style for the nagivator buttons, which include
-         * ⏮️,◀️,▶️, and ⏭️.
-         * Note that navigator buttons only show up if there are more
-         * options than the defined page length of this builder.
-         */
-        navigator: Exclude<ButtonStyle, ButtonStyle.Link>;
-        /**
-         * The button style for the center button displaying the available
-         * pages.
-         * Note that navigator buttons only show up if there are more
-         * options than the defined page length of this builder.
-         */
-        middle: Exclude<ButtonStyle, ButtonStyle.Link>;
-    };
+    navigatorStyle: Exclude<ButtonStyle, ButtonStyle.Link>;
+    /**
+     * The button style for the center button displaying the available
+     * pages.
+     * Note that navigator buttons only show up if there are more
+     * options than the defined page length of this builder.
+     */
+    pageLabelStyle: Exclude<ButtonStyle, ButtonStyle.Link>;
 };
 /**
  * The three types of Tuples that are generated
@@ -138,15 +156,13 @@ declare class ChoiceSelectMenuBuilder<ChoiceType> {
     options: ChoiceType[];
     /**
      * Sets the custom ID of this builder.
-     * @param {string} customId The custom ID to set
-     * @returns {ChoiceSelectMenuBuilder}
+     * @param {string} customId - The custom ID to set
      */
     setCustomId(customId: string): this;
     /**
      * Set the minimum amount of choices of this builder. Defaults to
      * 0 for every new instance.
-     * @param {number} amount The minimum amount of choices to select in this menu.
-     * @returns {ChoiceSelectMenuBuilder}
+     * @param {number} amount - The minimum amount of choices to select in this menu.
      */
     setMinChoices(amount: number): this;
     /**
@@ -177,33 +193,29 @@ declare class ChoiceSelectMenuBuilder<ChoiceType> {
     setDescription(descriptionFn: NonNullable<PageSelectComponent<ChoiceType>['descriptionFn']> | null): this;
     /**
      * Set the button styles for the navigator buttons.
-     * @param navigators The desired style for the navigator buttons.
-     * @param centerButton The desired style for the center button displaying the current page.
+     * @param style The desired style for the navigator buttons.
      */
-    setButtonStyles(navigators: Exclude<ButtonStyle, ButtonStyle.Link>, centerButton: Exclude<ButtonStyle, ButtonStyle.Link>): this;
+    setNavigatorStyle(style: Exclude<ButtonStyle, ButtonStyle.Link>): this;
+    /**
+     * Set the button styles for the center button displaying the current page.
+     * @param style The desired style for the center button displaying the current page.
+     */
+    setPageLabelStyle(style: Exclude<ButtonStyle, ButtonStyle.Link>): this;
     /**
      * Set the placeholder of this builder's select menu.
-     * @param placeholder A static string to set as placeholder
-     *
-     * Note that the placeholder must be below discord's placeholder character limit.
-     * @see {@link https://discord.com/developers/docs/interactions/message-components#select-menu-object-select-menu-structure}
-     */
-    setPlaceholder(placeholder: string | null): this;
-    /**
-     * Set the placeholder of this builder's select menu.
-     * @param placeholder A callback function to dynamically set the placeholder. Passes
+     * @param placeholder A static string to set as placeholder, or
+     * a callback function to dynamically set the placeholder. Passes
      * the minimum and maximum choices of the current select menu.
      *
      * Note that the placeholder must be below discord's placeholder character limit.
      * @see {@link https://discord.com/developers/docs/interactions/message-components#select-menu-object-select-menu-structure
      */
-    setPlaceholder(placeholder: ((minChoices: number, maxChoices: number) => string) | null): this;
+    setPlaceholder(placeholder: string | ((minChoices: number, maxChoices: number) => string) | null): this;
     /**
      * Set the selected values of this builder.
      * @param selected The value, array of values, or callback function to
      * determine the selected elements. Note that an array of values defaults to
      * `Array.prototype.includes()`, which may fail for non-primitive types.
-     * @returns {ChoiceSelectMenuBuilder}
      */
     setValues(selected: SelectCallback<ChoiceType>): this;
     /**
@@ -326,24 +338,11 @@ declare class ChoiceSelectMenuBuilder<ChoiceType> {
      */
     private updateSelectedFromValues;
     /**
-     * Update the carrySelected, pageLength and maxPage properties
-     * to the new values.
-     */
-    private updatePageProps;
-    /**
      * Transforms the provided option into a usable API Select Menu Option.
      * @param i The index of the array to transform at.
      * @param value The value to transform.
      */
     private toAPISelectMenuOption;
-    /**
-     * Transforms the options into a usable API Select Menu Option.
-     * @param start The start of the slice to map. Leave undefined to
-     * directly access the options array.
-     * @param end The end of the slice to map. Defaults to the end
-     * of the options array.
-     */
-    private visualizeOptions;
     /**
      * Generates the page buttons for the currently selected page.
      * Disables buttons dependent on what page the user is on and

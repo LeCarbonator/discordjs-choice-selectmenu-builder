@@ -10,6 +10,7 @@ import {
     StringSelectMenuBuilder,
     StringSelectMenuInteraction
 } from 'discord.js';
+import { PageManager } from './PageManager';
 
 /**
  * Represents a callback function that is passed to Array prototype methods such as
@@ -27,29 +28,11 @@ type PageSelectComponent<ChoiceType> = {
      */
     customId?: string;
     /**
-     * The minimum amount of choices that a user must make.
-     * Note that it only prevents selecting less than this value, it
-     * can still be visually shown without any selections.
-     */
-    minChoices: number;
-    /**
-     * The maximum amount of choices that a user may make.
-     * This value defaults to `options.length`.
-     */
-    maxChoices?: number;
-    /**
      * A collection of selected values and the index they are found at.
      * The key is used to ensure pagination is applied correctly
      * The values represent the selected items of the array.
      */
     selected: Collection<number, ChoiceType>;
-    /**
-     * Whether or not the selected items are carried throughout each page.
-     * This is an edge case where `minChoices === maxChoices`, which would
-     * otherwise prevent changing pages and values.
-     * @internal
-     */
-    carrySelected: boolean;
     /**
      * The placeholder to display on the select menu.
      */
@@ -75,46 +58,25 @@ type PageSelectComponent<ChoiceType> = {
      * @see {@link https://discord.com/developers/docs/interactions/message-components#select-menu-object-select-option-structure}
      */
     descriptionFn?: (option: ChoiceType, index: number) => string;
+
     /**
-     * Stores the current page data of this builder.
+     * Contains data related to pages and methods to change them.
      */
-    page: {
-        /**
-         * The 0-indexed page the builder is currently on.
-         * This is always in the range `0 <= current <= max`
-         */
-        current: number;
-        /**
-         * The maximum 0-indexed page the builder can reach.
-         * This property is derived from the page's length
-         */
-        max: number;
-        /**
-         * The length that a single select menu page can have.
-         * This property defaults to Discord's limit, although
-         * it may be lower depending on the `carrySelected` edge case.
-         */
-        length: number;
-    };
+    pages: PageManager<ChoiceType>;
     /**
-     * Stores the current button styles of this builder.
+     * The button style for the nagivator buttons, which include
+     * ⏮️,◀️,▶️, and ⏭️.
+     * Note that navigator buttons only show up if there are more
+     * options than the defined page length of this builder.
      */
-    buttonStyles: {
-        /**
-         * The button style for the nagivator buttons, which include
-         * ⏮️,◀️,▶️, and ⏭️.
-         * Note that navigator buttons only show up if there are more
-         * options than the defined page length of this builder.
-         */
-        navigator: Exclude<ButtonStyle, ButtonStyle.Link>;
-        /**
-         * The button style for the center button displaying the available
-         * pages.
-         * Note that navigator buttons only show up if there are more
-         * options than the defined page length of this builder.
-         */
-        middle: Exclude<ButtonStyle, ButtonStyle.Link>;
-    };
+    navigatorStyle: Exclude<ButtonStyle, ButtonStyle.Link>;
+    /**
+     * The button style for the center button displaying the available
+     * pages.
+     * Note that navigator buttons only show up if there are more
+     * options than the defined page length of this builder.
+     */
+    pageLabelStyle: Exclude<ButtonStyle, ButtonStyle.Link>;
 };
 
 /**
@@ -151,26 +113,19 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
         choices: ChoiceType[],
         selected?: SelectCallback<ChoiceType>
     ) {
-        const selectedFn = this.narrowSelectCallback(selected);
-        this.data = {
-            selected: new Collection(),
-            labelFn: (value) => `${value}`,
-            minChoices: 0,
-            carrySelected: false,
-            page: {
-                current: 0,
-                length: ChoiceSelectMenuBuilder.OPTIONS_LIMIT,
-                max: Math.floor(
-                    choices.length / ChoiceSelectMenuBuilder.OPTIONS_LIMIT
-                )
-            },
-            buttonStyles: {
-                navigator: ButtonStyle.Primary,
-                middle: ButtonStyle.Danger
-            }
-        };
+        const collection = new Collection<number, ChoiceType>();
         this.options = choices;
-        this.addValues(selectedFn);
+        this.data = {
+            selected: collection,
+            labelFn: (value) => `${value}`,
+            pages: new PageManager(choices, collection, 0),
+            navigatorStyle: ButtonStyle.Primary,
+            pageLabelStyle: ButtonStyle.Danger
+        };
+
+        if (typeof selected !== 'undefined') {
+            this.addValues(selected);
+        }
     }
 
     /**
@@ -183,6 +138,7 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
      * Contains all data related to this builder instance.
      */
     data: PageSelectComponent<ChoiceType>;
+
     /**
      * A reference to the array this builder represents.
      */
@@ -190,8 +146,7 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
 
     /**
      * Sets the custom ID of this builder.
-     * @param {string} customId The custom ID to set
-     * @returns {ChoiceSelectMenuBuilder}
+     * @param {string} customId - The custom ID to set
      */
     public setCustomId(customId: string): this {
         this.data.customId = customId;
@@ -201,8 +156,7 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
     /**
      * Set the minimum amount of choices of this builder. Defaults to
      * 0 for every new instance.
-     * @param {number} amount The minimum amount of choices to select in this menu.
-     * @returns {ChoiceSelectMenuBuilder}
+     * @param {number} amount - The minimum amount of choices to select in this menu.
      */
     public setMinChoices(amount: number): this {
         if (amount > ChoiceSelectMenuBuilder.OPTIONS_LIMIT)
@@ -213,8 +167,7 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
                 'MinChoices must not exceed the amount of available options.'
             );
 
-        this.data.minChoices = amount;
-        this.updatePageProps();
+        this.data.pages.minChoices = amount;
         return this;
     }
 
@@ -229,8 +182,7 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
             throw new Error(
                 'MaxChoices must not exceed the amount of available options.'
             );
-        this.data.maxChoices = amount;
-        this.updatePageProps();
+        this.data.pages.maxChoices = amount;
         return this;
     }
 
@@ -272,37 +224,35 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
 
     /**
      * Set the button styles for the navigator buttons.
-     * @param navigators The desired style for the navigator buttons.
-     * @param centerButton The desired style for the center button displaying the current page.
+     * @param style The desired style for the navigator buttons.
      */
-    public setButtonStyles(
-        navigators: Exclude<ButtonStyle, ButtonStyle.Link>,
-        centerButton: Exclude<ButtonStyle, ButtonStyle.Link>
+    public setNavigatorStyle(
+        style: Exclude<ButtonStyle, ButtonStyle.Link>
     ): this {
-        this.data.buttonStyles.navigator = navigators;
-        this.data.buttonStyles.middle = centerButton ?? ButtonStyle.Danger;
+        this.data.navigatorStyle = style;
+        return this;
+    }
+
+    /**
+     * Set the button styles for the center button displaying the current page.
+     * @param style The desired style for the center button displaying the current page.
+     */
+    public setPageLabelStyle(
+        style: Exclude<ButtonStyle, ButtonStyle.Link>
+    ): this {
+        this.data.pageLabelStyle = style;
         return this;
     }
 
     /**
      * Set the placeholder of this builder's select menu.
-     * @param placeholder A static string to set as placeholder
-     *
-     * Note that the placeholder must be below discord's placeholder character limit.
-     * @see {@link https://discord.com/developers/docs/interactions/message-components#select-menu-object-select-menu-structure}
-     */
-    public setPlaceholder(placeholder: string | null): this;
-    /**
-     * Set the placeholder of this builder's select menu.
-     * @param placeholder A callback function to dynamically set the placeholder. Passes
+     * @param placeholder A static string to set as placeholder, or
+     * a callback function to dynamically set the placeholder. Passes
      * the minimum and maximum choices of the current select menu.
      *
      * Note that the placeholder must be below discord's placeholder character limit.
      * @see {@link https://discord.com/developers/docs/interactions/message-components#select-menu-object-select-menu-structure
      */
-    public setPlaceholder(
-        placeholder: ((minChoices: number, maxChoices: number) => string) | null
-    ): this;
     public setPlaceholder(
         placeholder:
             | string
@@ -322,7 +272,6 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
      * @param selected The value, array of values, or callback function to
      * determine the selected elements. Note that an array of values defaults to
      * `Array.prototype.includes()`, which may fail for non-primitive types.
-     * @returns {ChoiceSelectMenuBuilder}
      */
     public setValues(selected: SelectCallback<ChoiceType>): this {
         this.data.selected.clear();
@@ -346,12 +295,12 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
             }
         });
 
-        const maxChoices = this.data.maxChoices ?? this.options.length;
+        const maxChoices = this.data.pages.maxChoices ?? this.options.length;
 
         if (maxChoices < this.data.selected.size)
-            throw new Error('MaxChoices in this menu ');
-
-        this.updatePageProps();
+            throw new Error(
+                'Selected values exceed the configured maximum amount.'
+            );
         return this;
     }
 
@@ -364,8 +313,9 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
     public filterValues(
         valueFn: (value: ChoiceType, index: number) => boolean
     ): this {
-        this.data.selected = this.data.selected.filter(valueFn);
-        this.updatePageProps();
+        const filtered = this.data.selected.filter(valueFn);
+        this.data.selected = filtered;
+        this.data.pages.selected = filtered;
         return this;
     }
 
@@ -375,7 +325,6 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
      */
     public clearValues(): this {
         this.data.selected.clear();
-        this.updatePageProps();
         return this;
     }
 
@@ -390,7 +339,6 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
 
         const value = this.data.selected.get(lastKey);
         this.data.selected.delete(lastKey);
-        this.updatePageProps();
         return value;
     }
 
@@ -399,16 +347,8 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
      * If no page is specified, it will return the current page.
      * @param {number|undefined} page The page to fetch options from.
      */
-    public optionsOnPage(page: number = this.data.page.current): ChoiceType[] {
-        if (this.options.length <= this.data.page.length) {
-            return this.options;
-        }
-        const start = page * this.data.page.length;
-        const end = start + this.data.page.length;
-        if (this.data.carrySelected) {
-            return [...this.values, ...this.options.slice(start, end)];
-        }
-        return this.options.slice(start, end);
+    public optionsOnPage(page: number = this.data.pages.current): ChoiceType[] {
+        return this.data.pages.getPage(page).map((v) => v[1]);
     }
 
     /**
@@ -419,16 +359,11 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
      * the selected options will ALWAYS be present on the page.
      * @param page The page to review
      */
-    public selectedOnPage(onPage = this.data.page.current): ChoiceType[] {
-        if (this.data.carrySelected) return [...this.data.selected.values()];
-        const { selected, page } = this.data;
-
-        const start = onPage * page.length;
-        const end = start + page.length;
-
-        return this.options
-            .slice(start, end)
-            .filter((_, i) => selected.has(start + i));
+    public selectedOnPage(onPage = this.data.pages.current): ChoiceType[] {
+        const page = this.data.pages.getPage(onPage);
+        return page
+            .filter((v) => this.data.selected.has(v[0]))
+            .map((v) => v[1]);
     }
 
     /**
@@ -480,21 +415,7 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
      * @returns {ChoiceSelectMenuBuilder}
      */
     public toFirstPage(): this {
-        const { page, selected } = this.data;
-        const { maxChoices = this.options.length } = this.data;
-        if (this.options.length <= page.length) return this;
-
-        if (selected.size < maxChoices || this.data.carrySelected) {
-            page.current = 0;
-            return this;
-        }
-
-        // we want to avoid exceeding our maxChoices. Therefore, if we have
-        // already a full amount of choices, we only go back the first
-        // page that has selections on it.
-
-        // maxChoices is always > 0, so selected.size cannot be 0 from if guard above
-        page.current = Math.floor(selected.firstKey()! / page.length);
+        this.data.pages.first();
         return this;
     }
 
@@ -505,26 +426,7 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
      * @returns {ChoiceSelectMenuBuilder}
      */
     public toPreviousPage(): this {
-        const { page, selected } = this.data;
-        const { maxChoices = this.options.length } = this.data;
-        if (this.options.length <= page.length) return this;
-
-        if (selected.size < maxChoices || this.data.carrySelected) {
-            page.current = Math.max(page.current - 1, 0);
-            return this;
-        }
-
-        // we want to avoid exceeding our maxChoices. Therefore, if we have
-        // already a full amount of choices, we only go back to the closest
-        // page that has selections on it.
-        const currentPageStart = page.current * page.length;
-        // maxChoices is always > 0, so selected.size cannot be 0 from if guard above
-        const maxPreviousIndex = selected
-            .filter((_, n) => n < currentPageStart)
-            .lastKey();
-        if (typeof maxPreviousIndex === 'undefined') return this;
-        page.current = Math.floor(maxPreviousIndex / page.length);
-
+        this.data.pages.previous();
         return this;
     }
 
@@ -535,26 +437,7 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
      * @returns {ChoiceSelectMenuBuilder}
      */
     public toNextPage(): this {
-        const { page, selected } = this.data;
-        const { maxChoices = this.options.length } = this.data;
-
-        if (this.options.length <= page.length) return this;
-
-        if (selected.size < maxChoices || this.data.carrySelected) {
-            page.current = Math.min(page.current + 1, page.max);
-            return this;
-        }
-
-        // we want to avoid exceeding our maxChoices. Therefore, if we have
-        // already a full amount of choices, we only go forward to the closest
-        // page that has selections on it.
-        const currentPageEnd = page.current * page.length + page.length;
-        const minNextIndex = selected
-            .filter((_, n) => n >= currentPageEnd)
-            .lastKey();
-        if (typeof minNextIndex === 'undefined') return this;
-
-        page.current = Math.floor(minNextIndex / page.length);
+        this.data.pages.next();
         return this;
     }
 
@@ -565,21 +448,7 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
      * @returns {ChoiceSelectMenuBuilder}
      */
     public toLastPage(): this {
-        const { page, selected } = this.data;
-        const { maxChoices = this.options.length } = this.data;
-        if (this.options.length <= page.length) return this;
-
-        if (selected.size < maxChoices || this.data.carrySelected) {
-            page.current = page.max;
-            return this;
-        }
-
-        // we want to avoid exceeding our maxChoices. Therefore, if we have
-        // already a full amount of choices, we only go forward to the last
-        // page that has selections on it.
-
-        // maxChoices is always > 0, so selected.size cannot be 0 from if guard above
-        page.current = Math.floor(selected.lastKey()! / page.length);
+        this.data.pages.last();
         return this;
     }
 
@@ -599,19 +468,8 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
             );
         }
 
-        const {
-            customId,
-            minChoices,
-            placeholder,
-            selected,
-            page,
-            carrySelected,
-            maxChoices = this.options.length
-        } = this.data;
+        const { customId, placeholder, selected, pages } = this.data;
 
-        const isPaginated = this.options.length > page.length;
-
-        const currentMin = !carrySelected && isPaginated ? 0 : minChoices;
         const currentMax = Math.min(
             // - maxChoices could be = this.options.length, so
             //      cap at this.optionsAtPage().length
@@ -619,20 +477,22 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
             //      this.selected.length === this.selectedOnPage().length,
             //   so they cancel each other out. This is only for pagination
             //   purposes.
-            maxChoices - selected.size + this.selectedOnPage().length,
+            (pages.maxChoices ?? this.options.length) -
+                selected.size +
+                this.selectedOnPage().length,
             this.optionsOnPage().length
         );
 
         const selectMenuData = {
             custom_id: customId,
-            min_values: currentMin,
+            min_values: pages.minChoices,
             max_values: currentMax
         } as Partial<APIStringSelectComponent>;
 
         switch (typeof placeholder) {
             case 'function':
                 selectMenuData.placeholder = placeholder(
-                    currentMin,
+                    pages.minChoices,
                     currentMax
                 );
                 break;
@@ -645,44 +505,16 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
 
         const selectMenu = new StringSelectMenuBuilder(selectMenuData);
 
-        // ----------------------------------
-        // No Pagination
-        if (!isPaginated) {
-            const apiOptions = this.visualizeOptions();
-            selectMenu.addOptions(apiOptions);
+        selectMenu.addOptions(
+            pages.getPage().map(this.toAPISelectMenuOption, this)
+        );
 
+        if (pages.max === 0) {
             return [
                 new ActionRowBuilder<StringSelectMenuBuilder>({
                     components: [selectMenu]
                 })
             ];
-        }
-
-        // ----------------------------------
-        // Pagination
-        const start = page.current * page.length;
-        const end = start + page.length;
-
-        if (carrySelected) {
-            const rawOptions = this.options
-                .slice(start, end + this.data.selected.size)
-                .map<[number, ChoiceType]>((option, i) => [i + start, option]);
-
-            const currentOptions = [
-                ...this.data.selected.entries(),
-                ...rawOptions.filter((v) => !this.data.selected.has(v[0]))
-            ];
-            selectMenu.addOptions(
-                currentOptions.map((v) => this.toAPISelectMenuOption(...v))
-            );
-        } else {
-            selectMenu.addOptions(
-                this.options
-                    .slice(start, end)
-                    .map((option, i) =>
-                        this.toAPISelectMenuOption(i + start, option)
-                    )
-            );
         }
 
         return [
@@ -749,10 +581,12 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
      * @param values The values to transform into selected values.
      */
     private updateSelectedFromValues(values: string[]): void {
-        if (!this.data.carrySelected) {
+        const { pages } = this.data;
+        if (!pages.carrySelected) {
             // remove keys on current page
-            const start = this.data.page.current * this.data.page.length;
-            const end = start + this.data.page.length;
+            const currentPage = pages.getPage().map((v) => v[0]);
+            const start = Math.min(...currentPage);
+            const end = Math.max(...currentPage);
             this.filterValues((_, i) => i >= end || i < start);
         } else {
             this.data.selected.clear();
@@ -767,24 +601,6 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
             if (typeof selectedOption === 'undefined') continue;
             this.data.selected.set(i, selectedOption);
         }
-        this.updatePageProps();
-    }
-
-    /**
-     * Update the carrySelected, pageLength and maxPage properties
-     * to the new values.
-     */
-    private updatePageProps(): void {
-        this.data.carrySelected = this.data.minChoices === this.data.maxChoices;
-
-        this.data.page.length = ChoiceSelectMenuBuilder.OPTIONS_LIMIT;
-        if (this.data.carrySelected) {
-            this.data.page.length -= this.data.selected.size;
-        }
-
-        this.data.page.max = Math.floor(
-            this.options.length / this.data.page.length
-        );
     }
 
     /**
@@ -793,34 +609,15 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
      * @param value The value to transform.
      */
     private toAPISelectMenuOption(
-        i: number,
-        value: ChoiceType
+        row: [index: number, element: ChoiceType]
     ): APISelectMenuOption {
+        const [i, o] = row;
         return {
-            label: this.data.labelFn(value, i),
-            description: this.data.descriptionFn?.(value, i),
+            label: this.data.labelFn(o, i),
+            description: this.data.descriptionFn?.(o, i),
             default: this.data.selected.has(i),
             value: `${this.data.customId}--${i}`
         } as APISelectMenuOption;
-    }
-    /**
-     * Transforms the options into a usable API Select Menu Option.
-     * @param start The start of the slice to map. Leave undefined to
-     * directly access the options array.
-     * @param end The end of the slice to map. Defaults to the end
-     * of the options array.
-     */
-    private visualizeOptions(
-        start?: number,
-        end?: number
-    ): APISelectMenuOption[] {
-        if (typeof start === 'undefined') {
-            return this.options.map((v, i) => this.toAPISelectMenuOption(i, v));
-        }
-
-        return this.options
-            .slice(start, end)
-            .map((v, i) => this.toAPISelectMenuOption(i + start, v));
     }
 
     /**
@@ -832,21 +629,21 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
         //
         // Basic Button Template
         //
-        const {
-            buttonStyles,
-            customId,
-            selected,
-            page,
-            carrySelected,
-            maxChoices = this.options.length
-        } = this.data;
-
+        const { customId, selected, pages, navigatorStyle, pageLabelStyle } =
+            this.data;
+        const currentPage = pages.getPage().map((v) => v[0]);
+        const start = Math.min(...currentPage);
+        const end = Math.max(...currentPage);
+        const max = pages.max;
         // ----------------------------------
         // Page buttons logic
-        let isAtStart = page.current === 0;
-        let isAtEnd = page.current === page.max;
+        let isAtStart = pages.current === 0;
+        let isAtEnd = pages.current === max;
 
-        if (!carrySelected && selected.size >= maxChoices) {
+        if (
+            !pages.carrySelected &&
+            selected.size >= (pages.maxChoices ?? this.options.length)
+        ) {
             // EDGE CASE SCENARIO
             // There are 3 pages and 5 max choices:
             // Page 1 - 0
@@ -855,36 +652,34 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
             //
             // you must not select page 1, as you cannot have a maxchoice set of 0.
             // therefore, we check what pages have selections on them.
-            const indexStart = page.current * page.length;
-            const indexEnd = indexStart + page.length;
-            isAtStart ||= selected.every((_, n) => n >= indexStart);
-            isAtEnd ||= selected.every((_, n) => n <= indexEnd);
+            isAtStart ||= selected.every((_, n) => n >= start);
+            isAtEnd ||= selected.every((_, n) => n <= end);
         }
         return new ActionRowBuilder<ButtonBuilder>().addComponents(
             new ButtonBuilder()
                 .setLabel('⏮️')
-                .setStyle(buttonStyles.navigator)
+                .setStyle(navigatorStyle)
                 .setDisabled(isAtStart)
                 .setCustomId(`${customId}--firstPage`),
             new ButtonBuilder()
                 .setLabel('◀️')
-                .setStyle(buttonStyles.navigator)
+                .setStyle(navigatorStyle)
                 .setDisabled(isAtStart)
                 .setCustomId(`${customId}--prevPage`),
             // The center button displays what page you're currently on.
             new ButtonBuilder()
-                .setLabel(`Page ${page.current + 1}/${page.max + 1}`)
-                .setStyle(buttonStyles.middle)
+                .setLabel(`Page ${pages.current + 1}/${max + 1}`)
+                .setStyle(pageLabelStyle)
                 .setDisabled(true)
                 .setCustomId('btn-never'),
             new ButtonBuilder()
                 .setLabel('▶️')
-                .setStyle(buttonStyles.navigator)
+                .setStyle(navigatorStyle)
                 .setDisabled(isAtEnd)
                 .setCustomId(`${customId}--nextPage`),
             new ButtonBuilder()
                 .setLabel('⏭️')
-                .setStyle(buttonStyles.navigator)
+                .setStyle(navigatorStyle)
                 .setDisabled(isAtEnd)
                 .setCustomId(`${customId}--lastPage`)
         );

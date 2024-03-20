@@ -53,14 +53,15 @@ function getUnchangedArray(pages: number, lastPageLength?: number): Tuple[][] {
 
 function getPage<AsTuple extends boolean>(
     manager: PageManager<string>,
+    page?: number,
     verbose?: AsTuple
 ): AsTuple extends true ? Tuple[] : number[] {
     if (verbose === false) {
-        return manager.getPage().map((v) => v[0]) as AsTuple extends true
+        return manager.getPage(page).map((v) => v[0]) as AsTuple extends true
             ? Tuple[]
             : number[];
     }
-    return manager.getPage() as AsTuple extends true ? Tuple[] : number[];
+    return manager.getPage(page) as AsTuple extends true ? Tuple[] : number[];
 }
 
 function getManager(
@@ -93,7 +94,9 @@ test('WHEN PageManager is created with few items THEN only one page is generated
 
     expect(manager.max).toBe(0);
     expect(getPage(manager).length).toBe(10);
-    expect(getPage(manager, false)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(getPage(manager, manager.current, false)).toEqual([
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9
+    ]);
 });
 
 test('WHEN carryselected is false THEN array remains unchanged', () => {
@@ -260,4 +263,18 @@ test('WHEN selected values change THEN pages change according to minChoices/maxC
     expect(getPage(manager)).toEqual(defaultDistribution[3]);
     manager.previous();
     expect(getPage(manager)).toEqual(defaultDistribution[0]);
+});
+
+test('WHEN page number parameter is passed THEN it equals the corresponding page', () => {
+    let manager = getManager(getArray(0, D_LIMIT * 8), [], 0, 5);
+
+    const defaultDistribution = getUnchangedArray(8);
+
+    for (let i = 0; i < 8; i++) {
+        expect(getPage(manager)).toEqual(defaultDistribution[i]);
+        manager.next();
+    }
+    for (let i = 0; i < 8; i++) {
+        expect(getPage(manager, i)).toEqual(defaultDistribution[i]);
+    }
 });

@@ -22,7 +22,7 @@
     ],
     "scripts": {
         "build": "tsc --noEmit && tsup",
-        "test": "npm run build && jest"
+        "test": "jest"
     },
     "keywords": [
         "discord",

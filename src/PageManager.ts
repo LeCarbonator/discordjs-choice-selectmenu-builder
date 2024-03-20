@@ -5,24 +5,48 @@ export class PageManager<T> {
         array: T[],
         selected: Collection<number, T>,
         minChoices: number,
-        maxChoices: number,
+        maxChoices?: number,
         currentPage = 0
     ) {
         this.current = currentPage;
         this.array = array;
         this.selected = selected;
         this.minChoices = minChoices;
-        this.maxChoices = maxChoices;
+        if (maxChoices) {
+            this.maxChoices = maxChoices;
+        }
     }
 
+    /**
+     * The length that a single select menu page can have.
+     */
     length = 25;
 
+    /**
+     * A reference to the array to paginate.
+     */
     array: T[];
+    /**
+     * A reference to the selected elements.
+     */
     selected: Collection<number, T>;
 
+    /**
+     * The 0-indexed page the builder is currently on.
+     * This is always in the range `0 <= current <= max`
+     */
     current: number;
+    /**
+     * The minimum amount of choices that a user must make.
+     * Note that it only prevents selecting less than this value, it
+     * can still be visually shown without any selections.
+     */
     minChoices: number;
-    maxChoices: number;
+    /**
+     * The maximum amount of choices that a user may make.
+     * This value defaults to `options.length`.
+     */
+    maxChoices?: number;
 
     get carrySelected(): boolean {
         return this.minChoices > 0;
@@ -77,9 +101,7 @@ export class PageManager<T> {
 
         if (output.length > this.length)
             throw new Error(
-                `Generated page exceeds set page length.\nExpected: <Array>.length <= ${
-                    this.length
-                }\n${output.map((v) => v[1])}`
+                `Generated page exceeds set page length.\nExpected: <Array>.length <= ${this.length}\nActual: ${output.length}`
             );
         return output;
     }
@@ -100,7 +122,9 @@ export class PageManager<T> {
             .map((e, i) => [i + start, e]);
 
         if (!removeSelected) return newSlice;
-        return newSlice.filter(([i, _]) => !this.selected.has(i));
+        return newSlice
+            .filter(([i, _]) => !this.selected.has(i))
+            .slice(0, this.length - this.selected.size);
     }
 
     /**
@@ -211,7 +235,7 @@ export class PageManager<T> {
             // no pagination
             this.array.length <= this.length ||
             // maxChoices has not yet been filled
-            this.selected.size < this.maxChoices
+            this.selected.size < (this.maxChoices ?? this.array.length)
         );
     }
 }

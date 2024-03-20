@@ -18,38 +18,210 @@ var __copyProps = (to, from, except, desc) => {
 };
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-// src/index.ts
-var src_exports = {};
-__export(src_exports, {
+// src/ChoiceSelectMenuBuilder.ts
+var ChoiceSelectMenuBuilder_exports = {};
+__export(ChoiceSelectMenuBuilder_exports, {
   ChoiceSelectMenuBuilder: () => ChoiceSelectMenuBuilder
 });
-module.exports = __toCommonJS(src_exports);
+module.exports = __toCommonJS(ChoiceSelectMenuBuilder_exports);
 var import_discord = require("discord.js");
+
+// src/PageManager.ts
+var PageManager = class {
+  static {
+    __name(this, "PageManager");
+  }
+  constructor(array, selected, minChoices, maxChoices, currentPage = 0) {
+    this.current = currentPage;
+    this.array = array;
+    this.selected = selected;
+    this.minChoices = minChoices;
+    if (maxChoices) {
+      this.maxChoices = maxChoices;
+    }
+  }
+  /**
+   * The length that a single select menu page can have.
+   */
+  length = 25;
+  /**
+   * A reference to the array to paginate.
+   */
+  array;
+  /**
+   * A reference to the selected elements.
+   */
+  selected;
+  /**
+   * The 0-indexed page the builder is currently on.
+   * This is always in the range `0 <= current <= max`
+   */
+  current;
+  /**
+   * The minimum amount of choices that a user must make.
+   * Note that it only prevents selecting less than this value, it
+   * can still be visually shown without any selections.
+   */
+  minChoices;
+  /**
+   * The maximum amount of choices that a user may make.
+   * This value defaults to `options.length`.
+   */
+  maxChoices;
+  get carrySelected() {
+    return this.minChoices > 0;
+  }
+  /**
+   * The maximum 0-indexed page the builder can reach.
+   * This property is derived from the page's length
+   */
+  get max() {
+    if (!this.carrySelected)
+      return Math.ceil(this.array.length / this.length) - 1;
+    const notSelected = this.array.length - this.selected.size;
+    const newPageSize = this.length - this.selected.size;
+    return Math.ceil(notSelected / newPageSize) - 1;
+  }
+  getPage(pageNumber) {
+    const page = Math.min(this.max, pageNumber ?? this.current);
+    if (!this.carrySelected) {
+      const start2 = page * this.length;
+      const end2 = start2 + this.length;
+      return this.getSlice(start2, end2, false);
+    }
+    const keys = [...this.selected.keys()];
+    let currentPage = 0;
+    let start = 0;
+    while (currentPage < page) {
+      start = this.getEndIndex(start, keys);
+      currentPage++;
+    }
+    const end = this.getEndIndex(start, keys);
+    const output = [
+      ...this.selected.entries(),
+      ...this.getSlice(start, end, true)
+    ];
+    if (output.length > this.length)
+      throw new Error(
+        `Generated page exceeds set page length.
+Expected: <Array>.length <= ${this.length}
+Actual: ${output.length}`
+      );
+    return output;
+  }
+  /**
+   * Returns a slice of the array, along with its actual index location.
+   * @param start - The start of the slice.
+   * @param end - The end of the slice.
+   * @param removeSelected - Removes selected indeces from the sliced array.
+   */
+  getSlice(start, end, removeSelected) {
+    const newSlice = this.array.slice(start, end).map((e, i) => [i + start, e]);
+    if (!removeSelected)
+      return newSlice;
+    return newSlice.filter(([i, _]) => !this.selected.has(i)).slice(0, this.length - this.selected.size);
+  }
+  /**
+   * Get the end index of the page starting from the start parameter.
+   * Will include more elements if the keys exist on the page.
+   * @param start - The offset to base the end index on.
+   * @param selectedIndeces - The selected indeces
+   */
+  getEndIndex(start, selectedIndeces) {
+    let end = start + this.length;
+    const withinBounds = selectedIndeces.filter(
+      (i) => i >= start && i < end
+    ).length;
+    return end - selectedIndeces.length + withinBounds;
+  }
+  first() {
+    if (this.hasFreePageMovement()) {
+      this.current = 0;
+      return;
+    }
+    const minSelected = Math.min(...this.selected.keys());
+    if (!isFinite(minSelected))
+      return;
+    this.current = Math.ceil(minSelected / this.length);
+    if (minSelected % this.length !== 0) {
+      this.current -= 1;
+    }
+  }
+  previous() {
+    if (this.hasFreePageMovement()) {
+      this.current = Math.max(0, this.current - 1);
+      return;
+    }
+    const currentPageStart = this.current * this.length;
+    const maxPreviousIndex = Math.max(
+      ...this.selected.filter((_, n) => n < currentPageStart).keys()
+    );
+    if (!isFinite(maxPreviousIndex))
+      return;
+    this.current = Math.ceil(maxPreviousIndex / this.length);
+    if (maxPreviousIndex % this.length !== 0) {
+      this.current -= 1;
+    }
+  }
+  next() {
+    const max = this.max;
+    if (this.hasFreePageMovement()) {
+      this.current = Math.min(max, this.current + 1);
+      return;
+    }
+    const currentPageEnd = this.current * this.length + this.length;
+    const minNextIndex = Math.min(
+      ...this.selected.filter((_, n) => n >= currentPageEnd).keys()
+    );
+    if (!isFinite(minNextIndex))
+      return;
+    this.current = Math.ceil(minNextIndex / this.length);
+    if (minNextIndex % this.length !== 0) {
+      this.current -= 1;
+    }
+  }
+  last() {
+    const max = this.max;
+    if (this.hasFreePageMovement()) {
+      this.current = max;
+      return;
+    }
+    const maxSelected = Math.max(...this.selected.keys());
+    if (!isFinite(maxSelected))
+      return;
+    this.current = Math.ceil(maxSelected / this.length);
+    if (maxSelected % this.length !== 0) {
+      this.current -= 1;
+    }
+  }
+  hasFreePageMovement() {
+    return (
+      // carrySelected follows the user no matter where
+      this.carrySelected || // no pagination
+      this.array.length <= this.length || // maxChoices has not yet been filled
+      this.selected.size < (this.maxChoices ?? this.array.length)
+    );
+  }
+};
+
+// src/ChoiceSelectMenuBuilder.ts
 var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
   static {
     __name(this, "ChoiceSelectMenuBuilder");
   }
   constructor(choices, selected) {
-    const selectedFn = this.narrowSelectCallback(selected);
-    this.data = {
-      selected: new import_discord.Collection(),
-      labelFn: (value) => `${value}`,
-      minChoices: 0,
-      carrySelected: false,
-      page: {
-        current: 0,
-        length: _ChoiceSelectMenuBuilder.OPTIONS_LIMIT,
-        max: Math.floor(
-          choices.length / _ChoiceSelectMenuBuilder.OPTIONS_LIMIT
-        )
-      },
-      buttonStyles: {
-        navigator: import_discord.ButtonStyle.Primary,
-        middle: import_discord.ButtonStyle.Danger
-      }
-    };
+    const collection = new import_discord.Collection();
     this.options = choices;
-    this.addValues(selectedFn);
+    this.data = {
+      selected: collection,
+      labelFn: (value) => `${value}`,
+      pages: new PageManager(choices, collection, 0),
+      navigatorStyle: import_discord.ButtonStyle.Primary,
+      pageLabelStyle: import_discord.ButtonStyle.Danger
+    };
+    if (typeof selected !== "undefined") {
+      this.addValues(selected);
+    }
   }
   /**
    * The maximum amount of select menu options that
@@ -66,8 +238,7 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
   options;
   /**
    * Sets the custom ID of this builder.
-   * @param {string} customId The custom ID to set
-   * @returns {ChoiceSelectMenuBuilder}
+   * @param {string} customId - The custom ID to set
    */
   setCustomId(customId) {
     this.data.customId = customId;
@@ -76,8 +247,7 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
   /**
    * Set the minimum amount of choices of this builder. Defaults to
    * 0 for every new instance.
-   * @param {number} amount The minimum amount of choices to select in this menu.
-   * @returns {ChoiceSelectMenuBuilder}
+   * @param {number} amount - The minimum amount of choices to select in this menu.
    */
   setMinChoices(amount) {
     if (amount > _ChoiceSelectMenuBuilder.OPTIONS_LIMIT)
@@ -88,8 +258,7 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
       throw new Error(
         "MinChoices must not exceed the amount of available options."
       );
-    this.data.minChoices = amount;
-    this.updatePageProps();
+    this.data.pages.minChoices = amount;
     return this;
   }
   /**
@@ -104,8 +273,7 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
       throw new Error(
         "MaxChoices must not exceed the amount of available options."
       );
-    this.data.maxChoices = amount;
-    this.updatePageProps();
+    this.data.pages.maxChoices = amount;
     return this;
   }
   /**
@@ -140,14 +308,29 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
   }
   /**
    * Set the button styles for the navigator buttons.
-   * @param navigators The desired style for the navigator buttons.
-   * @param centerButton The desired style for the center button displaying the current page.
+   * @param style The desired style for the navigator buttons.
    */
-  setButtonStyles(navigators, centerButton) {
-    this.data.buttonStyles.navigator = navigators;
-    this.data.buttonStyles.middle = centerButton ?? import_discord.ButtonStyle.Danger;
+  setNavigatorStyle(style) {
+    this.data.navigatorStyle = style;
     return this;
   }
+  /**
+   * Set the button styles for the center button displaying the current page.
+   * @param style The desired style for the center button displaying the current page.
+   */
+  setPageLabelStyle(style) {
+    this.data.pageLabelStyle = style;
+    return this;
+  }
+  /**
+   * Set the placeholder of this builder's select menu.
+   * @param placeholder A static string to set as placeholder, or
+   * a callback function to dynamically set the placeholder. Passes
+   * the minimum and maximum choices of the current select menu.
+   *
+   * Note that the placeholder must be below discord's placeholder character limit.
+   * @see {@link https://discord.com/developers/docs/interactions/message-components#select-menu-object-select-menu-structure
+   */
   setPlaceholder(placeholder) {
     if (placeholder === null) {
       delete this.data.placeholder;
@@ -161,7 +344,6 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
    * @param selected The value, array of values, or callback function to
    * determine the selected elements. Note that an array of values defaults to
    * `Array.prototype.includes()`, which may fail for non-primitive types.
-   * @returns {ChoiceSelectMenuBuilder}
    */
   setValues(selected) {
     this.data.selected.clear();
@@ -183,10 +365,11 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
         collection.set(index, option);
       }
     });
-    const maxChoices = this.data.maxChoices ?? this.options.length;
+    const maxChoices = this.data.pages.maxChoices ?? this.options.length;
     if (maxChoices < this.data.selected.size)
-      throw new Error("MaxChoices in this menu ");
-    this.updatePageProps();
+      throw new Error(
+        "Selected values exceed the configured maximum amount."
+      );
     return this;
   }
   /**
@@ -196,8 +379,9 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
    * @returns {ChoiceSelectMenuBuilder}
    */
   filterValues(valueFn) {
-    this.data.selected = this.data.selected.filter(valueFn);
-    this.updatePageProps();
+    const filtered = this.data.selected.filter(valueFn);
+    this.data.selected = filtered;
+    this.data.pages.selected = filtered;
     return this;
   }
   /**
@@ -206,7 +390,6 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
    */
   clearValues() {
     this.data.selected.clear();
-    this.updatePageProps();
     return this;
   }
   /**
@@ -220,7 +403,6 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
       return void 0;
     const value = this.data.selected.get(lastKey);
     this.data.selected.delete(lastKey);
-    this.updatePageProps();
     return value;
   }
   /**
@@ -228,16 +410,8 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
    * If no page is specified, it will return the current page.
    * @param {number|undefined} page The page to fetch options from.
    */
-  optionsOnPage(page = this.data.page.current) {
-    if (this.options.length <= this.data.page.length) {
-      return this.options;
-    }
-    const start = page * this.data.page.length;
-    const end = start + this.data.page.length;
-    if (this.data.carrySelected) {
-      return [...this.values, ...this.options.slice(start, end)];
-    }
-    return this.options.slice(start, end);
+  optionsOnPage(page = this.data.pages.current) {
+    return this.data.pages.getPage(page).map((v) => v[1]);
   }
   /**
    * Determines the selected values on the current page. If no
@@ -247,13 +421,9 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
    * the selected options will ALWAYS be present on the page.
    * @param page The page to review
    */
-  selectedOnPage(onPage = this.data.page.current) {
-    if (this.data.carrySelected)
-      return [...this.data.selected.values()];
-    const { selected, page } = this.data;
-    const start = onPage * page.length;
-    const end = start + page.length;
-    return this.options.slice(start, end).filter((_, i) => selected.has(start + i));
+  selectedOnPage(onPage = this.data.pages.current) {
+    const page = this.data.pages.getPage(onPage);
+    return page.filter((v) => this.data.selected.has(v[0])).map((v) => v[1]);
   }
   /**
    * The selected values of this select menu.
@@ -299,15 +469,7 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
    * @returns {ChoiceSelectMenuBuilder}
    */
   toFirstPage() {
-    const { page, selected } = this.data;
-    const { maxChoices = this.options.length } = this.data;
-    if (this.options.length <= page.length)
-      return this;
-    if (selected.size < maxChoices || this.data.carrySelected) {
-      page.current = 0;
-      return this;
-    }
-    page.current = Math.floor(selected.firstKey() / page.length);
+    this.data.pages.first();
     return this;
   }
   /**
@@ -317,19 +479,7 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
    * @returns {ChoiceSelectMenuBuilder}
    */
   toPreviousPage() {
-    const { page, selected } = this.data;
-    const { maxChoices = this.options.length } = this.data;
-    if (this.options.length <= page.length)
-      return this;
-    if (selected.size < maxChoices || this.data.carrySelected) {
-      page.current = Math.max(page.current - 1, 0);
-      return this;
-    }
-    const currentPageStart = page.current * page.length;
-    const maxPreviousIndex = selected.filter((_, n) => n < currentPageStart).lastKey();
-    if (typeof maxPreviousIndex === "undefined")
-      return this;
-    page.current = Math.floor(maxPreviousIndex / page.length);
+    this.data.pages.previous();
     return this;
   }
   /**
@@ -339,19 +489,7 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
    * @returns {ChoiceSelectMenuBuilder}
    */
   toNextPage() {
-    const { page, selected } = this.data;
-    const { maxChoices = this.options.length } = this.data;
-    if (this.options.length <= page.length)
-      return this;
-    if (selected.size < maxChoices || this.data.carrySelected) {
-      page.current = Math.min(page.current + 1, page.max);
-      return this;
-    }
-    const currentPageEnd = page.current * page.length + page.length;
-    const minNextIndex = selected.filter((_, n) => n >= currentPageEnd).lastKey();
-    if (typeof minNextIndex === "undefined")
-      return this;
-    page.current = Math.floor(minNextIndex / page.length);
+    this.data.pages.next();
     return this;
   }
   /**
@@ -361,15 +499,7 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
    * @returns {ChoiceSelectMenuBuilder}
    */
   toLastPage() {
-    const { page, selected } = this.data;
-    const { maxChoices = this.options.length } = this.data;
-    if (this.options.length <= page.length)
-      return this;
-    if (selected.size < maxChoices || this.data.carrySelected) {
-      page.current = page.max;
-      return this;
-    }
-    page.current = Math.floor(selected.lastKey() / page.length);
+    this.data.pages.last();
     return this;
   }
   /**
@@ -386,17 +516,7 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
         "ChoiceSelectMenuBuilder.customId: expected a string primitive"
       );
     }
-    const {
-      customId,
-      minChoices,
-      placeholder,
-      selected,
-      page,
-      carrySelected,
-      maxChoices = this.options.length
-    } = this.data;
-    const isPaginated = this.options.length > page.length;
-    const currentMin = !carrySelected && isPaginated ? 0 : minChoices;
+    const { customId, placeholder, selected, pages } = this.data;
     const currentMax = Math.min(
       // - maxChoices could be = this.options.length, so
       //      cap at this.optionsAtPage().length
@@ -404,18 +524,18 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
       //      this.selected.length === this.selectedOnPage().length,
       //   so they cancel each other out. This is only for pagination
       //   purposes.
-      maxChoices - selected.size + this.selectedOnPage().length,
+      (pages.maxChoices ?? this.options.length) - selected.size + this.selectedOnPage().length,
       this.optionsOnPage().length
     );
     const selectMenuData = {
       custom_id: customId,
-      min_values: currentMin,
+      min_values: pages.minChoices,
       max_values: currentMax
     };
     switch (typeof placeholder) {
       case "function":
         selectMenuData.placeholder = placeholder(
-          currentMin,
+          pages.minChoices,
           currentMax
         );
         break;
@@ -426,32 +546,15 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
         break;
     }
     const selectMenu = new import_discord.StringSelectMenuBuilder(selectMenuData);
-    if (!isPaginated) {
-      const apiOptions = this.visualizeOptions();
-      selectMenu.addOptions(apiOptions);
+    selectMenu.addOptions(
+      pages.getPage().map(this.toAPISelectMenuOption, this)
+    );
+    if (pages.max === 0) {
       return [
         new import_discord.ActionRowBuilder({
           components: [selectMenu]
         })
       ];
-    }
-    const start = page.current * page.length;
-    const end = start + page.length;
-    if (carrySelected) {
-      const rawOptions = this.options.slice(start, end + this.data.selected.size).map((option, i) => [i + start, option]);
-      const currentOptions = [
-        ...this.data.selected.entries(),
-        ...rawOptions.filter((v) => !this.data.selected.has(v[0]))
-      ];
-      selectMenu.addOptions(
-        currentOptions.map((v) => this.toAPISelectMenuOption(...v))
-      );
-    } else {
-      selectMenu.addOptions(
-        this.options.slice(start, end).map(
-          (option, i) => this.toAPISelectMenuOption(i + start, option)
-        )
-      );
     }
     return [
       this.navigatorButtons,
@@ -508,9 +611,11 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
    * @param values The values to transform into selected values.
    */
   updateSelectedFromValues(values) {
-    if (!this.data.carrySelected) {
-      const start = this.data.page.current * this.data.page.length;
-      const end = start + this.data.page.length;
+    const { pages } = this.data;
+    if (!pages.carrySelected) {
+      const currentPage = pages.getPage().map((v) => v[0]);
+      const start = Math.min(...currentPage);
+      const end = Math.max(...currentPage);
       this.filterValues((_, i) => i >= end || i < start);
     } else {
       this.data.selected.clear();
@@ -522,47 +627,20 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
         continue;
       this.data.selected.set(i, selectedOption);
     }
-    this.updatePageProps();
-  }
-  /**
-   * Update the carrySelected, pageLength and maxPage properties
-   * to the new values.
-   */
-  updatePageProps() {
-    this.data.carrySelected = this.data.minChoices === this.data.maxChoices;
-    this.data.page.length = _ChoiceSelectMenuBuilder.OPTIONS_LIMIT;
-    if (this.data.carrySelected) {
-      this.data.page.length -= this.data.selected.size;
-    }
-    this.data.page.max = Math.floor(
-      this.options.length / this.data.page.length
-    );
   }
   /**
    * Transforms the provided option into a usable API Select Menu Option.
    * @param i The index of the array to transform at.
    * @param value The value to transform.
    */
-  toAPISelectMenuOption(i, value) {
+  toAPISelectMenuOption(row) {
+    const [i, o] = row;
     return {
-      label: this.data.labelFn(value, i),
-      description: this.data.descriptionFn?.(value, i),
+      label: this.data.labelFn(o, i),
+      description: this.data.descriptionFn?.(o, i),
       default: this.data.selected.has(i),
       value: `${this.data.customId}--${i}`
     };
-  }
-  /**
-   * Transforms the options into a usable API Select Menu Option.
-   * @param start The start of the slice to map. Leave undefined to
-   * directly access the options array.
-   * @param end The end of the slice to map. Defaults to the end
-   * of the options array.
-   */
-  visualizeOptions(start, end) {
-    if (typeof start === "undefined") {
-      return this.options.map((v, i) => this.toAPISelectMenuOption(i, v));
-    }
-    return this.options.slice(start, end).map((v, i) => this.toAPISelectMenuOption(i + start, v));
   }
   /**
    * Generates the page buttons for the currently selected page.
@@ -570,29 +648,24 @@ var ChoiceSelectMenuBuilder = class _ChoiceSelectMenuBuilder {
    * how many choices are remaining.
    */
   get navigatorButtons() {
-    const {
-      buttonStyles,
-      customId,
-      selected,
-      page,
-      carrySelected,
-      maxChoices = this.options.length
-    } = this.data;
-    let isAtStart = page.current === 0;
-    let isAtEnd = page.current === page.max;
-    if (!carrySelected && selected.size >= maxChoices) {
-      const indexStart = page.current * page.length;
-      const indexEnd = indexStart + page.length;
-      isAtStart ||= selected.every((_, n) => n >= indexStart);
-      isAtEnd ||= selected.every((_, n) => n <= indexEnd);
+    const { customId, selected, pages, navigatorStyle, pageLabelStyle } = this.data;
+    const currentPage = pages.getPage().map((v) => v[0]);
+    const start = Math.min(...currentPage);
+    const end = Math.max(...currentPage);
+    const max = pages.max;
+    let isAtStart = pages.current === 0;
+    let isAtEnd = pages.current === max;
+    if (!pages.carrySelected && selected.size >= (pages.maxChoices ?? this.options.length)) {
+      isAtStart ||= selected.every((_, n) => n >= start);
+      isAtEnd ||= selected.every((_, n) => n <= end);
     }
     return new import_discord.ActionRowBuilder().addComponents(
-      new import_discord.ButtonBuilder().setLabel("\u23EE\uFE0F").setStyle(buttonStyles.navigator).setDisabled(isAtStart).setCustomId(`${customId}--firstPage`),
-      new import_discord.ButtonBuilder().setLabel("\u25C0\uFE0F").setStyle(buttonStyles.navigator).setDisabled(isAtStart).setCustomId(`${customId}--prevPage`),
+      new import_discord.ButtonBuilder().setLabel("\u23EE\uFE0F").setStyle(navigatorStyle).setDisabled(isAtStart).setCustomId(`${customId}--firstPage`),
+      new import_discord.ButtonBuilder().setLabel("\u25C0\uFE0F").setStyle(navigatorStyle).setDisabled(isAtStart).setCustomId(`${customId}--prevPage`),
       // The center button displays what page you're currently on.
-      new import_discord.ButtonBuilder().setLabel(`Page ${page.current + 1}/${page.max + 1}`).setStyle(buttonStyles.middle).setDisabled(true).setCustomId("btn-never"),
-      new import_discord.ButtonBuilder().setLabel("\u25B6\uFE0F").setStyle(buttonStyles.navigator).setDisabled(isAtEnd).setCustomId(`${customId}--nextPage`),
-      new import_discord.ButtonBuilder().setLabel("\u23ED\uFE0F").setStyle(buttonStyles.navigator).setDisabled(isAtEnd).setCustomId(`${customId}--lastPage`)
+      new import_discord.ButtonBuilder().setLabel(`Page ${pages.current + 1}/${max + 1}`).setStyle(pageLabelStyle).setDisabled(true).setCustomId("btn-never"),
+      new import_discord.ButtonBuilder().setLabel("\u25B6\uFE0F").setStyle(navigatorStyle).setDisabled(isAtEnd).setCustomId(`${customId}--nextPage`),
+      new import_discord.ButtonBuilder().setLabel("\u23ED\uFE0F").setStyle(navigatorStyle).setDisabled(isAtEnd).setCustomId(`${customId}--lastPage`)
     );
   }
 };
