@@ -13,12 +13,14 @@ A custom Discord.js builder to easily visualize an array of choices to a user.
     -   Quick access to selected elements of array
     -   Simple formatting using callback functions
 -   Similar syntax to discord.js builders for ease of use
--   Safety with pages - Respects minimum and maximum choices - Allows selections on multiple pages
+-   Safety with pages
+    -   Respects minimum and maximum choices
+    -   Allows selections on multiple pages
 
 ## Installation Node
 
 ```sh
-npm install discordjs-choice-selectmenu-builder
+npm install --save discordjs-choice-selectmenu-builder
 ```
 
 ```js
@@ -47,9 +49,12 @@ const options = [
 ];
 
 const selectMenu = new ChoiceSelectMenuBuilder(options)
-    .setCustomId('foo') // set custom Id of select menu
-    .setMinChoices(1) // set minChoices of select menu. Works with pagination!
-    .setMaxChoices(3); // set maxChoices of select menu. Works with pagination!
+    // set custom Id of select menu
+    .setCustomId('foo')
+    // set minimum choices of select menu. Works with pagination!
+    .setMinChoices(1)
+    // set maximum choices of select menu. Works with pagination!
+    .setMaxChoices(3);
 
 selectMenu
     // format elements into readable labels
@@ -59,13 +64,14 @@ selectMenu
     // format placeholder statically or dynamically
     .setPlaceholder('Custom placeholder')
     .setPlaceholder((min, max) => `Select up to ${max} values ...`)
-    // set default values
+    // set the selected values
     .setValues((value, i) => value.id === 1)
+    // add selected values
+    .addValues((value, i) => value.id === 2)
     // change the default styles of the navigator buttons
-    .setButtonStyles(
-        ButtonStyle.Primary, // navigator buttons
-        ButtonStyle.Success // center    button
-    );
+    .setNavigatorStyle(ButtonStyle.Primary)
+    // change the default style of the center label button
+    .setPageLabelStyle(ButtonStyle.Success);
 ```
 
 ## Response Handling

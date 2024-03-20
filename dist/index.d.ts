@@ -1,4 +1,4 @@
-import { Collection, ButtonStyle, MessageComponentInteraction, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder } from 'discord.js';
+import { Collection, ButtonStyle, Interaction, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder } from 'discord.js';
 
 declare class PageManager<T> {
     constructor(array: T[], selected: Collection<number, T>, minChoices: number, maxChoices?: number, currentPage?: number);
@@ -81,9 +81,9 @@ type PageSelectComponent<ChoiceType> = {
     /**
      * The callback function to transform an array element into a readable
      * label string. Note that discord's character limit on labels apply.
-     * @param option An element from the `options` array.
-     * @param index The element's index in the `options` array.
-     * @returns A string that must be below Discord's character limit for
+     * @param option - An element from the `options` array.
+     * @param index - The element's index in the `options` array.
+     * @returns - A string that must be below Discord's character limit for
      * select menu option labels.
      * @see {@link https://discord.com/developers/docs/interactions/message-components#select-menu-object-select-option-structure}
      */
@@ -92,9 +92,9 @@ type PageSelectComponent<ChoiceType> = {
      * The callback function to transform an array element into a readable
      * description string. Note that discord's character limit on descriptions apply.
      * Will not create a description by default.
-     * @param option An element from the `options` array.
-     * @param index The element's index in the `options` array.
-     * @returns A string that must be below Discord's character limit for
+     * @param option - An element from the `options` array.
+     * @param index - The element's index in the `options` array.
+     * @returns - A string that must be below Discord's character limit for
      * select menu option descriptions.
      * @see {@link https://discord.com/developers/docs/interactions/message-components#select-menu-object-select-option-structure}
      */
@@ -131,15 +131,17 @@ type PageSelectMenuActionRow = [] | [menu: ActionRowBuilder<StringSelectMenuBuil
 ];
 /**
  * Represents the three main types of setting values as selected.
- * If the passed type is not a function, it will resort to
- * Array.prototype.includes() and Object.is() to compare the passed
- * value instead.
+ * - If the passed type is a function, that function will be called to set the values.
+ * - If the passed type is an array, it will default to `Array#includes()`.
+ * - Otherwise, `Object.is()` equality is used.
  */
 type SelectCallback<ChoiceType> = ChoiceType | ChoiceType[] | ArrayCallback<ChoiceType, boolean>;
-/**
- * Manages a select menu interface to select elements in an array.
- */
 declare class ChoiceSelectMenuBuilder<ChoiceType> {
+    /**
+     * Manages a select menu interface to select elements in an array.
+     * @param choices - The array of choices to represent.
+     * @param selected - A callback function that defines what values are chosen.
+     */
     constructor(choices: ChoiceType[], selected?: SelectCallback<ChoiceType>);
     /**
      * The maximum amount of select menu options that
@@ -151,7 +153,7 @@ declare class ChoiceSelectMenuBuilder<ChoiceType> {
      */
     data: PageSelectComponent<ChoiceType>;
     /**
-     * A reference to the array this builder represents.
+     * The reference to the array this builder represents.
      */
     options: ChoiceType[];
     /**
@@ -162,101 +164,96 @@ declare class ChoiceSelectMenuBuilder<ChoiceType> {
     /**
      * Set the minimum amount of choices of this builder. Defaults to
      * 0 for every new instance.
-     * @param {number} amount - The minimum amount of choices to select in this menu.
+     * @param amount - The minimum amount of choices to select in this menu.
      */
     setMinChoices(amount: number): this;
     /**
      * Set the maximum amount of choices of this select menu.
-     * @param {number} amount The maximum amount of choices to select in this menu.
-     * @returns {ChoiceSelectMenuBuilder}
+     * @param amount - The maximum amount of choices to select in this menu.
      */
     setMaxChoices(amount: number): this;
     /**
      * Sets the callback function to transform an array element into a readable
-     * label string. Note that discord's character limit on labels apply.
-     * @param {visualizeCallback} labelFn - The callback function to transform the element.
-     * @returns A string that must be below Discord's character limit for
-     * select menu option labels.
+     * label string. Discord's label character limit applies.
+     * @param labelFn - The callback function to transform the element.
+     * The returned string must be below Discord's label character limit.
      * @see {@link https://discord.com/developers/docs/interactions/message-components#select-menu-object-select-option-structure}
-     * @returns {ChoiceSelectMenuBuilder}
      */
     setLabel(labelFn: PageSelectComponent<ChoiceType>['labelFn']): this;
     /**
      * Sets the callback function to transform an array element into a readable
-     * description string. Note that discord's character limit on descriptions apply.
+     * description string. Discord's description character limit applies.
      * Will not create a description by default.
-     * @param {visualizeCallback} descriptionFn - The callback function to transform the element.
-     * @returns A string that must be below Discord's character limit for
-     * select menu option descriptions.
+     * @param descriptionFn - The callback function to transform the element.
+     * The returned string must be below Discord's description character limit.
      * @see {@link https://discord.com/developers/docs/interactions/message-components#select-menu-object-select-option-structure}
      */
     setDescription(descriptionFn: NonNullable<PageSelectComponent<ChoiceType>['descriptionFn']> | null): this;
     /**
      * Set the button styles for the navigator buttons.
-     * @param style The desired style for the navigator buttons.
+     * @param style - The style to apply on the navigator buttons.
      */
     setNavigatorStyle(style: Exclude<ButtonStyle, ButtonStyle.Link>): this;
     /**
      * Set the button styles for the center button displaying the current page.
-     * @param style The desired style for the center button displaying the current page.
+     * @param style - The style to apply on the center button displaying the current page.
      */
     setPageLabelStyle(style: Exclude<ButtonStyle, ButtonStyle.Link>): this;
     /**
      * Set the placeholder of this builder's select menu.
-     * @param placeholder A static string to set as placeholder, or
+     * @param placeholder - A static string to set as placeholder, or
      * a callback function to dynamically set the placeholder. Passes
      * the minimum and maximum choices of the current select menu.
      *
-     * Note that the placeholder must be below discord's placeholder character limit.
+     * The placeholder must be below Discord's placeholder character limit.
      * @see {@link https://discord.com/developers/docs/interactions/message-components#select-menu-object-select-menu-structure
      */
     setPlaceholder(placeholder: string | ((minChoices: number, maxChoices: number) => string) | null): this;
     /**
      * Set the selected values of this builder.
-     * @param selected The value, array of values, or callback function to
-     * determine the selected elements. Note that an array of values defaults to
-     * `Array.prototype.includes()`, which may fail for non-primitive types.
+     * @param selected - A callback function or an object / array of objects to use.
+     * - If the passed type is a function, that function will be called to set the values.
+     * - If the passed type is an array, it will default to `Array#includes()`.
+     * - Otherwise, `Object.is()` equality is used.
      */
     setValues(selected: SelectCallback<ChoiceType>): this;
     /**
      * Add the selected values of this builder.
-     * @param selected The value, array of values, or callback function to
-     * determine the additional selected elements. Note that an array of values defaults to
-     * `Array.prototype.includes()`, which may fail for non-primitive types.
-     * @returns {ChoiceSelectMenuBuilder}
+     * @param selected - A callback function or an object / array of objects to use.
+     * - If the passed type is a function, that function will be called to set the values.
+     * - If the passed type is an array, it will default to `Array#includes()`.
+     * - Otherwise, `Object.is()` equality is used.
      */
     addValues(selected: SelectCallback<ChoiceType>): this;
     /**
      * Filters the selected values based on the provided function.
-     * @param valueFn The callback function to use as filter. If this function
-     * resolves to false, the selected value is removed from this menu.
-     * @returns {ChoiceSelectMenuBuilder}
+     * @param valueFn - The callback function to use as filter. If this function
+     * returns false, the selected value is removed from this menu.
      */
     filterValues(valueFn: (value: ChoiceType, index: number) => boolean): this;
     /**
      * Clears all selected values from this menu.
-     * @returns {ChoiceSelectMenuBuilder}
      */
     clearValues(): this;
     /**
      * Removes the last selected value and returns it.
      * If there are no selected values, it will return undefined.
      *
+     * This value may be undefined even if `minChoices > 0`.
      */
     popValue(): ChoiceType | undefined;
     /**
      * Returns a shallow copy of options that are visible on the current page.
      * If no page is specified, it will return the current page.
-     * @param {number|undefined} page The page to fetch options from.
+     * @param page - The page to fetch options from.
      */
     optionsOnPage(page?: number): ChoiceType[];
     /**
      * Determines the selected values on the current page. If no
      * parameter is provided, it will take the current page.
      *
-     * Note that if you have the same amount of minChoices as maxChoices,
-     * the selected options will ALWAYS be present on the page.
-     * @param page The page to review
+     * Note that if `minChoices > 0`, selected values will always exist on the page.
+     * @param page - The page to fetch the selected options from.
      */
     selectedOnPage(onPage?: number): ChoiceType[];
     /**
@@ -264,10 +261,14 @@ declare class ChoiceSelectMenuBuilder<ChoiceType> {
      * Returns a shallow copy of the provided choices.
      * If you only need the first property, consider using
      * {@link ChoiceSelectMenuBuilder#firstValue}
+     *
+     * This array may be empty even if `minChoices > 0`.
      */
     get values(): ChoiceType[];
     /**
      * The first selected value of this select menu.
+     *
+     * This value may be undefined even if `minChoices > 0`.
      */
     get firstValue(): ChoiceType | undefined;
     /**
@@ -277,41 +278,37 @@ declare class ChoiceSelectMenuBuilder<ChoiceType> {
      * const selected = [1, 2, 3];
      * selectMenu.narrowSelectCallback(selected) // this is now (v) => selected.includes(v)
      * ```
-     * @param selected The provided value or function to narrow down into a select function.
-     * @returns A function callback that can be used in `Array.prototype.filter()` and the like.
+     * @param selected - The provided value or function to narrow down into a select function.
+     * @returns - A function callback that can be used in `Array.prototype.filter()` and the like.
      */
     private narrowSelectCallback;
     /**
      * Changes the paginated menu to the first page. If the maximum
      * amount of choices has been reached, it only skips to pages with
      * selections on it.
-     * @returns {ChoiceSelectMenuBuilder}
      */
     toFirstPage(): this;
     /**
      * Changes the paginated menu to the previous page. If the maximum
      * amount of choices has been reached, only skips to pages with
      * selections on it.
-     * @returns {ChoiceSelectMenuBuilder}
      */
     toPreviousPage(): this;
     /**
      * Changes the paginated menu to the next page. If the maximum
      * amount of choices has been reached, only skips to pages with
      * selections on it.
-     * @returns {ChoiceSelectMenuBuilder}
      */
     toNextPage(): this;
     /**
      * Changes the paginated menu to the last page. If the maximum
      * amount of choices has been reached, it only skips to pages with
      * selections on it.
-     * @returns {ChoiceSelectMenuBuilder}
      */
     toLastPage(): this;
     /**
      * Creates the action row based on this builder.
-     * If the passed `options` array is empty, no select menu will be generated.
+     * If the `choices` array is empty, no select menu will be generated.
      * If the array exceeds discord's limit for select menus,
      * a second row of page buttons will be passed.
      */
@@ -320,13 +317,12 @@ declare class ChoiceSelectMenuBuilder<ChoiceType> {
      * Determines whether or not the interaction belongs to this builder.
      * If the interaction belongs to this builder, it handles the received
      * interaction response.
-     * @param interaction The component interaction response to check
+     * @param interaction - The component interaction response to check
      */
-    isInteraction(interaction: MessageComponentInteraction): boolean;
+    isInteraction(interaction: Interaction): boolean;
     /**
      * Determines whether or not the interaction belongs to this builder.
-     * @param interaction The interaction to narrow
-     * @returns {boolean}
+     * @param interaction - The interaction to narrow
      */
     private hasComponent;
     /**
@@ -334,13 +330,12 @@ declare class ChoiceSelectMenuBuilder<ChoiceType> {
      * into the selected values. This assumes that the StringSelectMenuInteraction
      * belongs to this ChoiceSelectMenuBuilder. If that assumption is not met or there
      * is some issue with the custom IDs, they will be filtered out.
-     * @param values The values to transform into selected values.
+     * @param values - The values to transform into selected values.
      */
     private updateSelectedFromValues;
     /**
      * Transforms the provided option into a usable API Select Menu Option.
-     * @param i The index of the array to transform at.
-     * @param value The value to transform.
+     * @param row - The row to transform, including its index and element.
      */
     private toAPISelectMenuOption;
     /**

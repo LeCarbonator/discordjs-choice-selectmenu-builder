@@ -1,7 +1,7 @@
 {
     "name": "discordjs-choice-selectmenu-builder",
-    "version": "1.1.6",
-    "description": "A utility builder to represent arrays as paginated Discord select menus.",
+    "version": "2.0.1",
+    "description": "An utility builder to represent arrays as paginated Discord select menus.",
     "exports": {
         ".": {
             "require": {
