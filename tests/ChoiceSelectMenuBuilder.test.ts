@@ -343,3 +343,16 @@ test('WHEN setters are called THEN data changes', () => {
     expect(apiSelectMenu.data.placeholder).toBe('Select up to 3');
     expect(apiButton.data.style).toBe(ButtonStyle.Danger);
 });
+
+test('WHEN options is empty THEN max and min choices do not throw an error', () => {
+    let manager = new ChoiceSelectMenuBuilder<string>([]);
+    expect(() => manager.setMinChoices(1).setMaxChoices(1)).not.toThrow(Error);
+    // unrelated errors
+    expect(() => manager.setMaxChoices(0)).toThrow(Error);
+
+    manager = new ChoiceSelectMenuBuilder(['1']);
+
+    expect(() => manager.setMinChoices(0).setMaxChoices(1)).not.toThrow(Error);
+    expect(() => manager.setMinChoices(1).setMaxChoices(2)).toThrow(Error);
+    expect(() => manager.setMinChoices(2)).toThrow(Error);
+});

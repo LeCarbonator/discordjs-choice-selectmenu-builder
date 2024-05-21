@@ -164,7 +164,8 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
         if (amount > ChoiceSelectMenuBuilder.OPTIONS_LIMIT)
             throw new Error("MinChoices may not be above Discord's limit");
         if (amount < 0) throw new Error('MinChoices must not be negative.');
-        if (amount > this.options.length)
+        // empty array is an exception, since it wouldn't show a select menu
+        if (this.options.length && amount > this.options.length)
             throw new Error(
                 'MinChoices must not exceed the amount of available options.'
             );
@@ -179,7 +180,8 @@ export class ChoiceSelectMenuBuilder<ChoiceType> {
      */
     public setMaxChoices(amount: number): this {
         if (amount <= 0) throw new Error('MaxChoices may not be 0 or lower.');
-        if (amount > this.options.length)
+        // empty array is an exception, since it wouldn't show a select menu
+        if (this.options.length && amount > this.options.length)
             throw new Error(
                 'MaxChoices must not exceed the amount of available options.'
             );
